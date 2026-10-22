@@ -21,12 +21,16 @@ Every tool here was reverse-engineered from a real shipped binary using [REA](ht
 | Tool | Family | Language | Folder |
 |------|--------|----------|--------|
 | CraxsRat v7.1 (Cobra mod) | Android RAT (Windows server) | VB.NET → C# | [`Cobra/`](Cobra/) |
+| BTMob v4.6.1 | Android RAT (WebSocket control panel) | VB.NET → C# | [`BtMob/`](BtMob/) |
 
 ## Repository layout
 
 - `Cobra/` — full decompiled & fixed-up C# source of the CraxsRat "Cobra" mod server, builds with `dotnet build`
 - `Cobra/libs/` — third-party dependencies the original shipped with (UI, charts, audio, GeoIP, JSON)
 - `Cobra/res/` — runtime resources (extract from the original package): fonts, flags, icons, APK-patching toolchain
+- `BtMob/` — full decompiled & fixed-up C# source of the BTMob Android-RAT control panel, builds with `dotnet build`
+- `BtMob/libs/` — the 13 dependencies the original shipped with (WebSocket4Net, Newtonsoft.Json, WebView2, custom UI)
+- `_Analysis/` — quarantined original binaries and static-analysis evidence (not part of any build)
 
 ## Method
 
