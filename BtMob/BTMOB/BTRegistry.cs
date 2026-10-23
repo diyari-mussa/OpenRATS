@@ -128,22 +128,33 @@ internal sealed class BTRegistry
 
 	private const string RegistryPath_settings_fav = "Software\\BTMOB\\Favorites";
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void AddOrUpdateValue(string valueName, object value)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RegistryPath))
+			key.SetValue(valueName, value ?? "");
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static object GetValue(string valueName, object defaultValue)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		try
+		{
+			using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegistryPath))
+			{
+				if (key == null)
+					return defaultValue;
+				return key.GetValue(valueName, defaultValue) ?? defaultValue;
+			}
+		}
+		catch
+		{
+			return defaultValue;
+		}
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void RemoveValue(string valueName)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegistryPath, writable: true))
+			key?.DeleteValue(valueName, throwOnMissingValue: false);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -152,16 +163,31 @@ internal sealed class BTRegistry
 		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void WriteBool(string keyName, bool value)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RegistryPath_settings))
+			key.SetValue(keyName, value ? 1 : 0, RegistryValueKind.DWord);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static bool ReadBool(string keyName, bool defaultValue = false)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		try
+		{
+			using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegistryPath_settings))
+			{
+				object value = key?.GetValue(keyName);
+				if (value == null)
+					return defaultValue;
+				if (value is int n)
+					return n != 0;
+				bool parsed;
+				return bool.TryParse(Convert.ToString(value), out parsed) ? parsed : defaultValue;
+			}
+		}
+		catch
+		{
+			return defaultValue;
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]

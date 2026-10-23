@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -229,6 +230,7 @@ public class SplashForm : Form
 			{
 				ProjectData.SetProjectError(ex);
 				Exception exception = ex;
+				_0024VB_0024Me.weready = true;
 				_0024State = -2;
 				_0024Builder.SetException(exception);
 				ProjectData.ClearProjectError();
@@ -331,73 +333,131 @@ public class SplashForm : Form
 		}
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	[DebuggerNonUserCode]
 	protected override void Dispose(bool disposing)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (disposing && components != null)
+			components.Dispose();
+		base.Dispose(disposing);
 	}
 
-	[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-	[System.Diagnostics.DebuggerStepThrough]
+	[DebuggerStepThrough]
 	private void InitializeComponent()
 	{
-		throw new System.AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		splashview = new WebView2();
+		closbtn = new DrakeUIButtonIcon();
+		toppanel = new Panel();
+		botompanel = new Panel();
+		leftpanel = new Panel();
+		rightpanel = new Panel();
+		Panel1 = new Panel();
+		((ISupportInitialize)splashview).BeginInit();
+		toppanel.SuspendLayout();
+		SuspendLayout();
+		splashview.Dock = DockStyle.Fill;
+		splashview.Name = EXGuarder._401B0861;
+		closbtn.Dock = DockStyle.Right;
+		closbtn.Text = EXGuarder._3D660C3A;
+		closbtn.Size = new Size(36, 28);
+		closbtn.Name = EXGuarder._151D360E;
+		toppanel.Dock = DockStyle.Top;
+		toppanel.Height = 28;
+		toppanel.BackColor = Color.FromArgb(6, 10, 15);
+		toppanel.Name = EXGuarder._37136B1E;
+		toppanel.Controls.Add(closbtn);
+		botompanel.Dock = DockStyle.Bottom;
+		botompanel.Height = 2;
+		botompanel.BackColor = Color.FromArgb(14, 22, 33);
+		botompanel.Name = EXGuarder._4A421C4E;
+		leftpanel.Dock = DockStyle.Left;
+		leftpanel.Width = 2;
+		leftpanel.BackColor = Color.FromArgb(14, 22, 33);
+		leftpanel.Name = EXGuarder._2B144633;
+		rightpanel.Dock = DockStyle.Right;
+		rightpanel.Width = 2;
+		rightpanel.BackColor = Color.FromArgb(14, 22, 33);
+		rightpanel.Name = EXGuarder._48524372;
+		Panel1.Dock = DockStyle.Fill;
+		Panel1.Name = EXGuarder._292C4410;
+		Panel1.Controls.Add(splashview);
+		ClientSize = new Size(720, 480);
+		BackColor = Color.FromArgb(6, 10, 15);
+		Controls.Add(Panel1);
+		Controls.Add(toppanel);
+		Controls.Add(botompanel);
+		Controls.Add(leftpanel);
+		Controls.Add(rightpanel);
+		Name = EXGuarder._5729204F;
+		Text = BTConst.myname;
+		toppanel.ResumeLayout(false);
+		((ISupportInitialize)splashview).EndInit();
+		ResumeLayout(false);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public SplashForm(Form1 parent)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		InitializeComponent();
+		mainform = parent;
+		Load += SplashForm_Load;
+		FormClosing += SplashForm_FormClosing;
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public void UpdateStatus(string message)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (splashview == null || splashview.CoreWebView2 == null || message == null)
+			return;
+		string safe = message.Replace("\\", "\\\\").Replace("'", "\\'");
+		splashview.ExecuteScriptAsync(string.Format(EXGuarder._0B071829, safe));
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public void ShowContinueButton()
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (splashview != null && splashview.CoreWebView2 != null)
+			splashview.ExecuteScriptAsync(EXGuarder._6C4E570E);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	[AsyncStateMachine(typeof(VB_0024StateMachine_37_SplashForm_Load))]
 	[DebuggerStepThrough]
 	private void SplashForm_Load(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		VB_0024StateMachine_37_SplashForm_Load stateMachine = new VB_0024StateMachine_37_SplashForm_Load();
+		stateMachine._0024VB_0024Me = this;
+		stateMachine._0024VB_0024Local_sender = sender;
+		stateMachine._0024VB_0024Local_e = e;
+		stateMachine._0024State = -1;
+		stateMachine._0024Builder = AsyncVoidMethodBuilder.Create();
+		stateMachine._0024Builder.Start(ref stateMachine);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void navcomplete(object sender, CoreWebView2NavigationCompletedEventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		try
+		{
+			if (e.IsSuccess && splashview.CoreWebView2 != null)
+				splashview.ExecuteScriptAsync(EXGuarder._54613E13);
+		}
+		catch
+		{
+		}
+		weready = true;
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void ExecuteAction()
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void vertext_MouseDown(object sender, MouseEventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void SplashForm_FormClosing(object sender, FormClosingEventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		weready = true;
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void closbtn_Click(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		weready = true;
+		Close();
 	}
 }

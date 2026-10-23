@@ -91,13 +91,34 @@ internal sealed class MyRes
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static Image ApplyRoundedCorners(Image inputImage, int cornerRadius)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (inputImage == null)
+			return null;
+		Bitmap bitmap = new Bitmap(inputImage.Width, inputImage.Height);
+		using (Graphics graphics = Graphics.FromImage(bitmap))
+		using (GraphicsPath path = GetRoundedRectPath(new Rectangle(0, 0, bitmap.Width, bitmap.Height), cornerRadius))
+		{
+			graphics.SmoothingMode = SmoothingMode.AntiAlias;
+			graphics.SetClip(path);
+			graphics.DrawImage(inputImage, 0, 0, bitmap.Width, bitmap.Height);
+		}
+		return bitmap;
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	private static GraphicsPath GetRoundedRectPath(Rectangle rect, int radius)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		GraphicsPath path = new GraphicsPath();
+		int diameter = Math.Max(0, radius) * 2;
+		if (diameter <= 0 || diameter > rect.Width || diameter > rect.Height)
+		{
+			path.AddRectangle(rect);
+			return path;
+		}
+		path.AddArc(rect.X, rect.Y, diameter, diameter, 180, 90);
+		path.AddArc(rect.Right - diameter, rect.Y, diameter, diameter, 270, 90);
+		path.AddArc(rect.Right - diameter, rect.Bottom - diameter, diameter, diameter, 0, 90);
+		path.AddArc(rect.X, rect.Bottom - diameter, diameter, diameter, 90, 90);
+		path.CloseFigure();
+		return path;
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]

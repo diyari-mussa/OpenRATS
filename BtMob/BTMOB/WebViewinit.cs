@@ -9,15 +9,25 @@ namespace BTMOB;
 [StandardModule]
 internal sealed class WebViewinit
 {
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void ApplyAsync(WebView2 wv, Form frm)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (wv == null || wv.CoreWebView2 == null)
+			return;
+		try
+		{
+			wv.CoreWebView2.Settings.IsStatusBarEnabled = false;
+			wv.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
+		}
+		catch
+		{
+		}
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	private static void HandleKeys(KeyEventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (e == null)
+			return;
+		if (e.KeyCode == Keys.F5 || e.KeyCode == Keys.F12)
+			e.Handled = true;
 	}
 }
