@@ -21,6 +21,12 @@
   </PropertyGroup>
   <ItemGroup />
   <ItemGroup>
+    <!-- TestLocalBuilder is a standalone harness project; keep it out of the app build. -->
+    <Compile Remove="TestLocalBuilder\**" />
+    <None Remove="TestLocalBuilder\**" />
+    <EmbeddedResource Remove="TestLocalBuilder\**" />
+  </ItemGroup>
+  <ItemGroup>
     <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="DrakeUI.Framework">
       <HintPath>libs\DrakeUI.Framework.dll</HintPath>

