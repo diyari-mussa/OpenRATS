@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net462</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <AssemblyName>WsProbe</AssemblyName>
+    <RootNamespace>WsProbe</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="WebSocket4Net">
+      <HintPath>..\libs\WebSocket4Net.dll</HintPath>
+    </Reference>
+    <Reference Include="SuperSocket.ClientEngine">
+      <HintPath>..\libs\SuperSocket.ClientEngine.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

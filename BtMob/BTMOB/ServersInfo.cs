@@ -169,13 +169,36 @@ public class ServersInfo : IEquatable<ServersInfo>
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	public ServersInfo(string address, string ServerId, string Servername, string serverkey, string colorstr)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		lockworker = new object();
+		Address = address;
+		Sid = ServerId;
+		Sname = Servername;
+		SCkey = serverkey;
+		Scolor = colorstr;
+		Sstate = "offline";
+		PingMs = "";
+		cookieContainer = new CookieContainer();
+		HttpClientHandler mainHandler = new HttpClientHandler
+		{
+			CookieContainer = cookieContainer,
+			UseCookies = true
+		};
+		HttpClientHandler downloadHandler = new HttpClientHandler
+		{
+			CookieContainer = cookieContainer,
+			UseCookies = true
+		};
+		MainhttpClient = new HttpClient(mainHandler);
+		DownloadHttpClient = new HttpClient(downloadHandler);
+		MainhttpClient.Timeout = TimeSpan.FromSeconds(30);
+		DownloadHttpClient.Timeout = TimeSpan.FromMinutes(10);
+		WSClient = new WebSocketClient("main", address, this);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	public bool Equals(ServersInfo other)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return other != null && Operators.CompareString(Address, other.Address, TextCompare: false) == 0;
 	}
 
 	bool IEquatable<ServersInfo>.Equals(ServersInfo other)

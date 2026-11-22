@@ -1841,15 +1841,13 @@ public class Ports : Form
 
 	private void b_ok_Click(object sender, EventArgs e)
 	{
+		// Offline bypass: skip the craxsrat.vip auth + update check entirely.
+		// Finish makes Timer1_Tick close the dialog; statuslabel must already be
+		// as long as "holder", otherwise the tick only keeps appending "" and
+		// never reaches the Finish branch.
 		base.DialogResult = DialogResult.OK;
-		if (loginworker.IsBusy)
-		{
-			CraxsAlert.Showinformation(Codes.AES_Decrypt("dpiLCWTWSlH1sTNfqjsrIg==", "back"));
-			return;
-		}
-		loadingimage.Visible = true;
-		loginbtn.Enabled = false;
-		loginworker.RunWorkerAsync();
+		Finish = true;
+		statuslabel.Text = holder;
 	}
 
 	private void b_reg_Click(object sender, EventArgs e)

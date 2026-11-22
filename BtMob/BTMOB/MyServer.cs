@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1714,9 +1715,29 @@ internal sealed class MyServer
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	[AsyncStateMachine(typeof(VB_0024StateMachine_0_startlogin))]
 	[DebuggerStepThrough]
-	public static Task<(bool, string)> startlogin(string uemail, string upass, string pinkey, string rankey, HttpClient client, string Serverip)
+	public static async Task<(bool, string)> startlogin(string uemail, string upass, string pinkey, string rankey, HttpClient client, string Serverip)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		try
+		{
+			string hardwareId = Conversions.ToString(Operators.AddObject(codes.GetHWID(), BTRegistry.GetValue("hd", "")));
+			var body = new VB_0024AnonymousType_6<string, string, string, string, string, string>("BT-MOB", uemail, upass, pinkey, hardwareId, rankey);
+			using (StringContent content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json"))
+			using (HttpResponseMessage response = await client.PostAsync(Conversions.ToString(BTConst.getApiUrl(BTConst.api_login, Serverip)), content))
+			{
+				if (!response.IsSuccessStatusCode)
+					return (false, "error: " + response.StatusCode);
+				JObject result = JObject.Parse(await response.Content.ReadAsStringAsync());
+				if (result["Success"] != null)
+					return (true, result["Success"].ToString().Trim('"'));
+				if (result["Fail"] != null)
+					return (false, "failed: " + result["Fail"]);
+				return (false, "Unexpected error.");
+			}
+		}
+		catch (Exception)
+		{
+			return (false, "Error: can't connect to server");
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -1724,7 +1745,7 @@ internal sealed class MyServer
 	[DebuggerStepThrough]
 	public static Task<(bool, object)> FetchStore(object @params, HttpClient client, string serverip)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return PostJson(BTConst.api_fetchstore, @params, client, serverip, allowBytes: true);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -1732,7 +1753,7 @@ internal sealed class MyServer
 	[DebuggerStepThrough]
 	public static Task<(bool, object)> FetchAppsAPI(object @params, HttpClient client, string serverip)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return PostJson(BTConst.api_userstoreapps, @params, client, serverip, allowBytes: false);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -1740,7 +1761,7 @@ internal sealed class MyServer
 	[DebuggerStepThrough]
 	public static Task<(bool, object)> FetchUpdates(object @params, HttpClient client, string serverip)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return PostJson(BTConst.api_updates, @params, client, serverip, allowBytes: false);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -1748,7 +1769,7 @@ internal sealed class MyServer
 	[DebuggerStepThrough]
 	public static Task<(bool, object)> ChangePassword(object @params, HttpClient client, string serverip)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return PostJson(BTConst.api_changepassword, @params, client, serverip, allowBytes: false);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -1756,21 +1777,54 @@ internal sealed class MyServer
 	[DebuggerStepThrough]
 	public static Task<(bool, object)> FetchCustomAPI(object @params, HttpClient client, string serverip)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return PostJson(BTConst.api_usercustomapps, @params, client, serverip, allowBytes: false);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	[AsyncStateMachine(typeof(VB_0024StateMachine_6_JoinServer))]
 	[DebuggerStepThrough]
-	public static Task<string> JoinServer(object @params, HttpClient client, string serverip, int timeoutMilliseconds = 10000)
+	public static async Task<string> JoinServer(object @params, HttpClient client, string serverip, int timeoutMilliseconds = 10000)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		try
+		{
+			using (CancellationTokenSource cts = new CancellationTokenSource(timeoutMilliseconds))
+			using (StringContent content = new StringContent(JsonConvert.SerializeObject(@params), Encoding.UTF8, "application/json"))
+			using (HttpResponseMessage response = await client.PostAsync(Conversions.ToString(BTConst.getApiUrl(BTConst.api_joinwebsocket, serverip)), content, cts.Token))
+			{
+				if (!response.IsSuccessStatusCode)
+					throw new Exception("Request failed");
+				return await response.Content.ReadAsStringAsync();
+			}
+		}
+		catch (TaskCanceledException)
+		{
+			return "{\"Fail\":\"request timeout x89\"}";
+		}
+		catch (Exception)
+		{
+			return "{\"Fail\":\"unknown error x88\"}";
+		}
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static string DecryptReply(string prm_key, string prm_iv, string prm_text_to_decrypt)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		byte[] keyRaw = Encoding.UTF8.GetBytes(prm_key ?? "");
+		byte[] key = new byte[16];
+		Buffer.BlockCopy(keyRaw, 0, key, 0, Math.Min(16, keyRaw.Length));
+		byte[] iv = new byte[16];
+		byte[] ivRaw = Encoding.UTF8.GetBytes(prm_iv ?? "");
+		Buffer.BlockCopy(ivRaw, 0, iv, 0, Math.Min(16, ivRaw.Length));
+		string cipherText = (prm_text_to_decrypt ?? "").Trim().Trim('"');
+		using (Aes aes = Aes.Create())
+		{
+			aes.Mode = CipherMode.CBC;
+			aes.Padding = PaddingMode.PKCS7;
+			aes.Key = key;
+			aes.IV = iv;
+			byte[] cipher = Convert.FromBase64String(cipherText);
+			using (ICryptoTransform dec = aes.CreateDecryptor())
+				return Encoding.UTF8.GetString(dec.TransformFinalBlock(cipher, 0, cipher.Length));
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -1778,6 +1832,42 @@ internal sealed class MyServer
 	[DebuggerStepThrough]
 	public static Task<(bool, object)> CommandStore(Dictionary<string, string> @params, HttpClient client, string serverip)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		Dictionary<string, string> encoded = new Dictionary<string, string>();
+		foreach (string key in @params.Keys)
+			encoded[key] = Uri.EscapeDataString(@params[key] ?? "");
+		return PostJson(BTConst.api_fetchstore, encoded, client, serverip, allowBytes: false);
+	}
+
+	private static async Task<(bool, object)> PostJson(string api, object body, HttpClient client, string serverip, bool allowBytes)
+	{
+		try
+		{
+			using (StringContent content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json"))
+			using (HttpResponseMessage response = await client.PostAsync(Conversions.ToString(BTConst.getApiUrl(api, serverip)), content))
+			{
+				if (!response.IsSuccessStatusCode)
+					return (false, "HTTP error: " + response.StatusCode);
+				string media = response.Content.Headers.ContentType?.MediaType;
+				if (Operators.CompareString(media, "application/json", TextCompare: false) == 0)
+				{
+					string text = await response.Content.ReadAsStringAsync();
+					JObject result = JObject.Parse(text);
+					if (result["Success"] != null)
+						return (true, result["Success"].ToString());
+					if (result["Req"] != null)
+						return (true, result["Req"].ToString());
+					if (result["Fail"] != null)
+						return (false, "Fail: " + result["Fail"]);
+					return (false, "Unknown response format: " + text);
+				}
+				if (allowBytes)
+					return (true, await response.Content.ReadAsByteArrayAsync());
+				return (false, "Unknown response 2: ");
+			}
+		}
+		catch (Exception ex)
+		{
+			return (false, "Error: " + ex.Message);
+		}
 	}
 }

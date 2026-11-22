@@ -724,15 +724,20 @@ public class basestyle : Form
 
 	private void basestyle_FormClosing(object sender, FormClosingEventArgs e)
 	{
-		if (myscr.Image != null)
+		try
 		{
-			myscr.Image = null;
+			if (myscr != null && myscr.Image != null)
+				myscr.Image = null;
+			if (myico != null && myico.Image != null)
+				myico.Image = null;
+			if (baseloader != null)
+			{
+				baseloader.Enabled = false;
+				baseloader.Dispose();
+			}
 		}
-		if (myico.Image != null)
+		catch (Exception)
 		{
-			myico.Image = null;
 		}
-		baseloader.Enabled = false;
-		baseloader.Dispose();
 	}
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Microsoft.VisualBasic.CompilerServices;
+using Microsoft.Win32;
 
 namespace BTMOB;
 
@@ -14,105 +15,136 @@ internal sealed class ServersMgr
 
 	private const char BLOCK_PAIR_SEPARATOR = ':';
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
+	private const string Root = BTConst.RegistryPath;
+
+	private static string KeyPath(string ipAddress)
+	{
+		return Root + "\\" + (ipAddress ?? "").Replace("\\", "_").Replace("/", "_");
+	}
+
 	private static void SaveServerData(string ipAddress, string fieldName, string value)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		using (RegistryKey key = Registry.CurrentUser.CreateSubKey(KeyPath(ipAddress)))
+			key.SetValue(fieldName, value ?? "");
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	private static string GetServerData(string ipAddress, string fieldName)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		using (RegistryKey key = Registry.CurrentUser.OpenSubKey(KeyPath(ipAddress)))
+			return key?.GetValue(fieldName) as string;
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void SaveServerPin(string ipAddress, string pinKey)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		SaveServerData(ipAddress, "pin", pinKey);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static string GetServerPin(string ipAddress)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return GetServerData(ipAddress, "pin");
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void SaveServerNextKey(string ipAddress, string nextKey)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		SaveServerData(ipAddress, "nextkey", nextKey);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static string GetServerNextKey(string ipAddress)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return GetServerData(ipAddress, "nextkey");
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void SaveServerIDF(string ipAddress, string idf)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		SaveServerData(ipAddress, "idf", idf);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static string GetServerIDF(string ipAddress)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return GetServerData(ipAddress, "idf");
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void DeleteServer(string ipAddress)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		using (RegistryKey root = Registry.CurrentUser.OpenSubKey(Root, writable: true))
+			root?.DeleteSubKeyTree((ipAddress ?? "").Replace("\\", "_").Replace("/", "_"), throwOnMissingSubKey: false);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static Dictionary<string, string> GetServerBlockedMap(string serverIpAddress)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return DeserializeBlocked(GetServerData(serverIpAddress, BLOCKED_FIELD));
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void SaveServerBlockedMap(string serverIpAddress, Dictionary<string, string> blocked)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		SaveServerData(serverIpAddress, BLOCKED_FIELD, SerializeBlocked(blocked));
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void AddServerBlockedClient(string serverIpAddress, string clientIp, string mobid)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		Dictionary<string, string> map = GetServerBlockedMap(serverIpAddress);
+		map[clientIp] = mobid;
+		SaveServerBlockedMap(serverIpAddress, map);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static void RemoveServerBlockedClient(string serverIpAddress, string clientIp)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		Dictionary<string, string> map = GetServerBlockedMap(serverIpAddress);
+		map.Remove(clientIp);
+		SaveServerBlockedMap(serverIpAddress, map);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static Dictionary<string, string> GetServerBlockedClients(string serverIpAddress)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		return GetServerBlockedMap(serverIpAddress);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	private static Dictionary<string, string> DeserializeBlocked(string raw)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		Dictionary<string, string> map = new Dictionary<string, string>();
+		if (string.IsNullOrEmpty(raw))
+			return map;
+		string[] entries = raw.Split(new string[1] { BLOCK_ENTRY_SEPARATOR }, StringSplitOptions.RemoveEmptyEntries);
+		foreach (string entry in entries)
+		{
+			int at = entry.IndexOf(BLOCK_PAIR_SEPARATOR);
+			if (at <= 0)
+				continue;
+			map[entry.Substring(0, at)] = entry.Substring(at + 1);
+		}
+		return map;
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	private static string SerializeBlocked(Dictionary<string, string> dict)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (dict == null || dict.Count == 0)
+			return "";
+		List<string> parts = new List<string>();
+		foreach (KeyValuePair<string, string> pair in dict)
+			parts.Add(pair.Key + BLOCK_PAIR_SEPARATOR + pair.Value);
+		return string.Join(BLOCK_ENTRY_SEPARATOR, parts);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public static Dictionary<string, Dictionary<string, string>> GetAllServers()
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		Dictionary<string, Dictionary<string, string>> all = new Dictionary<string, Dictionary<string, string>>();
+		using (RegistryKey root = Registry.CurrentUser.OpenSubKey(Root))
+		{
+			if (root == null)
+				return all;
+			foreach (string name in root.GetSubKeyNames())
+			{
+				using (RegistryKey child = root.OpenSubKey(name))
+				{
+					if (child == null)
+						continue;
+					Dictionary<string, string> fields = new Dictionary<string, string>();
+					foreach (string valueName in child.GetValueNames())
+						fields[valueName] = Convert.ToString(child.GetValue(valueName));
+					all[name] = fields;
+				}
+			}
+		}
+		return all;
 	}
 }

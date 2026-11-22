@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
@@ -1026,15 +1027,39 @@ public class loader : Form
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	public loader(string Trgt_Server, string Trgt_email, string Trgt_pass, ServersInfo Srvinf)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		Load += loader_Load;
+		TargetServer = Trgt_Server;
+		Targetemail = Trgt_email;
+		TargetPass = Trgt_pass;
+		Serverinf = Srvinf;
+		EmptKey = "XXXX-XXXX-XXXX-XXXX";
+		Text = Trgt_Server;
+		Size = new Size(520, 680);
+		loadpanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(6, 10, 15) };
+		loadwbv = new WebView2 { Dock = DockStyle.Fill };
+		mywebview = new WebView2 { Dock = DockStyle.Fill };
+		Controls.Add(mywebview);
+		Controls.Add(loadpanel);
+		loadpanel.Controls.Add(loadwbv);
+		mywebview.NavigationCompleted += mywebview_NavigationCompleted;
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
-	[AsyncStateMachine(typeof(VB_0024StateMachine_57_loader_Load))]
-	[DebuggerStepThrough]
-	private void loader_Load(object sender, EventArgs e)
+	private async void loader_Load(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		try
+		{
+			loadpanel.BringToFront();
+			if (codes.StrisEmpty(Conversions.ToString(BTRegistry.GetValue("hd", ""))))
+				BTRegistry.AddOrUpdateValue("hd", codes.StrGenerator(16));
+			await mywebview.EnsureCoreWebView2Async();
+			mywebview.CoreWebView2.Settings.UserAgent = BTConst.myagent;
+			mywebview.Source = new Uri(Conversions.ToString(BTConst.getApiUrl(BTConst.page_login_4, TargetServer)));
+		}
+		catch (Exception ex)
+		{
+			Errorlogin();
+			Debuger.Log_e("loader_Load", ex.Message);
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -1066,19 +1091,23 @@ public class loader : Form
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	public void Errorlogin()
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		BTAlerter.erroes(BTConst.smthngwrongstr);
+		hideloader();
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public void hideloader()
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (loadpanel != null)
+			loadpanel.Visible = false;
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public void showloader()
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (loadpanel != null)
+		{
+			loadpanel.Visible = true;
+			loadpanel.BringToFront();
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -1093,18 +1122,24 @@ public class loader : Form
 		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
 	}
 
-	private void StartLogin()
+	private string ResolvePin()
 	{
 		string text = ServersMgr.GetServerPin(TargetServer);
-		if ((text == null) | codes.StrisEmpty(text))
-		{
-			text = EmptKey;
-		}
+		if (codes.StrisEmpty(text) || Operators.CompareString(text, EmptKey, TextCompare: false) == 0)
+			text = Serverinf != null ? Serverinf.SCkey : null;
+		if (codes.StrisEmpty(text) || Operators.CompareString(text, EmptKey, TextCompare: false) == 0)
+			text = "BTMOB";
+		return text;
+	}
+
+	private void StartLogin()
+	{
+		string text = ResolvePin();
 		if (codes.StrisEmpty(Targetemail) | codes.StrisEmpty(TargetPass) | codes.StrisEmpty(text))
 		{
 			BTAlerter.Warnings(BTConst.enter_eml_pass);
 		}
-		else if (Operators.CompareString(text, EmptKey, TextCompare: false) != 0)
+		else
 		{
 			Thread thread = new Thread([SpecialName] () =>
 			{
@@ -1112,14 +1147,6 @@ public class loader : Form
 			});
 			thread.IsBackground = true;
 			thread.Start();
-		}
-		else
-		{
-			Invoke((VB_0024AnonymousDelegate_0)([SpecialName] async () =>
-			{
-				await mywebview.ExecuteScriptAsync("document.getElementById('login-button').click();");
-				Autologin();
-			}));
 		}
 	}
 
@@ -1162,15 +1189,31 @@ public class loader : Form
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	public void Autologin()
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		Setp1_Trylogin(ResolvePin());
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
-	[AsyncStateMachine(typeof(VB_0024StateMachine_76_mywebview_NavigationCompleted))]
-	[DebuggerStepThrough]
-	private void mywebview_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+	private async void mywebview_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (e == null || !e.IsSuccess || mywebview?.Source == null)
+			return;
+		if (mywebview.Source.AbsolutePath.IndexOf("loginbt3", StringComparison.OrdinalIgnoreCase) < 0)
+			return;
+		try
+		{
+			string pin = ResolvePin();
+			string emailJs = (Targetemail ?? "").Replace("\\", "\\\\").Replace("'", "\\'");
+			string passJs = (TargetPass ?? "").Replace("\\", "\\\\").Replace("'", "\\'");
+			string pinJs = (pin ?? "").Replace("\\", "\\\\").Replace("'", "\\'");
+			await mywebview.ExecuteScriptAsync("document.getElementById('email').value = '" + emailJs + "';");
+			await mywebview.ExecuteScriptAsync("document.getElementById('password').value = '" + passJs + "';");
+			await mywebview.ExecuteScriptAsync("document.getElementById('bt-key-input').value = '" + pinJs + "';");
+			Setp1_Trylogin(pin);
+		}
+		catch (Exception ex)
+		{
+			Debuger.Log_e("NAVComplete", ex.Message);
+			Errorlogin();
+		}
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -1184,7 +1227,12 @@ public class loader : Form
 	[DebuggerStepThrough]
 	public void Setp1_Trylogin(string pinkey)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		VB_0024StateMachine_78_Setp1_Trylogin stateMachine = new VB_0024StateMachine_78_Setp1_Trylogin();
+		stateMachine._0024VB_0024Local_pinkey = pinkey;
+		stateMachine._0024VB_0024Me = this;
+		stateMachine._0024Builder = AsyncVoidMethodBuilder.Create();
+		stateMachine._0024State = -1;
+		stateMachine._0024Builder.Start(ref stateMachine);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -1192,7 +1240,11 @@ public class loader : Form
 	[DebuggerStepThrough]
 	public void Step2_join()
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		VB_0024StateMachine_79_Step2_join stateMachine = new VB_0024StateMachine_79_Step2_join();
+		stateMachine._0024VB_0024Me = this;
+		stateMachine._0024Builder = AsyncVoidMethodBuilder.Create();
+		stateMachine._0024State = -1;
+		stateMachine._0024Builder.Start(ref stateMachine);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]

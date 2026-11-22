@@ -37,6 +37,9 @@
     <Compile Remove="JitIlDump\**" />
     <None Remove="JitIlDump\**" />
     <EmbeddedResource Remove="JitIlDump\**" />
+    <Compile Remove="WsProbe\**" />
+    <None Remove="WsProbe\**" />
+    <EmbeddedResource Remove="WsProbe\**" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.VisualBasic" />

